@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Referral Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="p-6 bg-gray-50">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  <h2 class="text-2xl font-bold mb-4">Referral Dashboard</h2>
+
+  <!-- Filters -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <input type="date" id="filterStart" class="p-2 border rounded" placeholder="Start date">
+    <input type="date" id="filterEnd" class="p-2 border rounded" placeholder="End date">
+    <select id="filterRegion" class="p-2 border rounded">
+      <option value="">All Regions</option>
+      <option value="London">London</option>
+      <option value="North">North</option>
+      <option value="South">South</option>
+      <option value="South-West">South-West</option>
+      <option value="Freetown">Freetown</option>
+      <option value="Other">Other</option>
+    </select>
+  </div>
+
+  <!-- Table -->
+  <table class="w-full border text-sm bg-white">
+    <thead>
+      <tr class="bg-gray-100 text-left">
+        <th class="p-2 border">Referrer ID</th>
+        <th class="p-2 border">Name</th>
+        <th class="p-2 border">Category</th>
+        <th class="p-2 border">Total Referrals</th>
+        <th class="p-2 border">Bonus Given</th>
+      </tr>
+    </thead>
+    <tbody id="referralTable">
+      <tr><td colspan="5" class="p-4 text-center">Loading...</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    async function loadReferralSummary() {
+      const start = document.getElementById('filterStart').value;
+      const end = document.getElementById('filterEnd').value;
+      const region = document.getElementById('filterRegion').value;
+
+      const res = await fetch(`/api/referrals/summary?start=${start}&end=${end}&region=${region}`);
+      const data = await res.json();
+
+      const table = document.getElementById('referralTable');
+      table.innerHTML = '';
+
+      if (data.length === 0) {
+        table.innerHTML = '<tr><td colspan="5" class="p-4 text-center">No results found.</td></tr>';
+        return;
+      }
+
+      data.forEach(row => {
+        table.innerHTML += `
+          <tr>
+            <td class="p-2 border">${row.ReferrerID}</td>
+            <td class="p-2 border">${row.Name}</td>
+            <td class="p-2 border">${row.Category || ''}</td>
+            <td class="p-2 border">${row.TotalReferrals}</td>
+            <td class="p-2 border">${row.BonusGiven ? 'Yes 🎉' : 'No'}</td>
+          </tr>
+        `;
+      });
+    }
+
+    document.getElementById('filterStart').addEventListener('change', loadReferralSummary);
+    document.getElementById('filterEnd').addEventListener('change', loadReferralSummary);
+    document.getElementById('filterRegion').addEventListener('change', loadReferralSummary);
+
+    window.onload = loadReferralSummary;
+  </script>
+</body>
+</html>

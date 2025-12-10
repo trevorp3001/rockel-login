@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard | Rockel Shipping</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #e8f5e9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .dashboard-box {
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .dashboard-box h2 {
+      margin-bottom: 1rem;
+    }
+    .logout-button {
+      padding: 0.5rem 1rem;
+      border: none;
+      background-color: #d32f2f;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-box">
+    <h2>Welcome to Rockel Shipping Dashboard</h2>
+    <p>You are successfully logged in.</p>
+    <form action="/logout" method="GET">
+      <button type="submit" class="logout-button">Log out</button>
+    </form>    
+  </div>
+</body>
+</html>

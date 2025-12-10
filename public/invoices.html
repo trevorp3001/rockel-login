@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoices | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+ <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <div id="toast" class="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded shadow hidden z-50"></div>
+
+  <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow">
+    <h2 class="text-2xl font-bold mb-1">Invoices</h2>
+    <div id="customerLabel" class="text-gray-600 font-bold mb-4"></div>
+
+
+    <!-- Summary -->
+    <div id="summary" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 text-sm font-medium text-gray-800">
+      <div class="bg-blue-50 p-4 rounded">Total Amount: <span id="sumTotal" class="font-bold">0</span></div>
+      <div class="bg-green-50 p-4 rounded">Total Paid: <span id="sumPaid" class="font-bold">0</span></div>
+      <div class="bg-red-50 p-4 rounded">Outstanding: <span id="sumBalance" class="font-bold">0</span></div>
+      <div class="bg-yellow-50 p-4 rounded">
+        <div>Paid: <span id="countPaid">0</span></div>
+        <div>Partial: <span id="countPartial">0</span></div>
+        <div>Unpaid: <span id="countUnpaid">0</span></div>
+      </div>
+    </div>
+
+    <form id="invoiceForm" class="space-y-4 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <input name="InvoiceDate" type="date" class="p-2 border rounded" required />
+        <input name="ReceiverName" placeholder="Receiver Name" class="p-2 border rounded" required />
+        <input name="Email" placeholder="Email" type="email" class="p-2 border rounded" />
+        <input name="Phone1" placeholder="Phone 1" class="p-2 border rounded" />
+        <input name="Phone2" placeholder="Phone 2" class="p-2 border rounded" />
+        <input name="Phone3" placeholder="Phone 3" class="p-2 border rounded" />
+        <input name="Address1" placeholder="Address 1" class="p-2 border rounded" />
+        <input name="Address2" placeholder="Address 2" class="p-2 border rounded" />
+        <input name="PostCode" placeholder="Post Code" class="p-2 border rounded" />
+        <input name="Country" placeholder="Country" class="p-2 border rounded" />
+        <label class="block">
+        <input type="checkbox" name="Delivery" value="1" id="DeliveryCheckbox" class="mr-1" />
+          Delivery?
+        </label>
+      </div>
+      <textarea name="Notes" placeholder="Notes" class="w-full p-2 border rounded"></textarea>
+      <div class="flex flex-wrap gap-4">
+        <button type="submit" class="bg-blue-700 text-white px-6 py-2 rounded">Create Invoice</button>
+        <a id="backBtn" href="#" class="bg-green-600 text-white px-6 py-2 rounded">Back to Customer</a>
+      </div>
+
+    </form>
+
+    <div class="mb-4">
+      <input id="searchInput" type="text" placeholder="Search invoices..." class="w-full p-2 border rounded" />
+    </div>    
+
+    <table class="min-w-full text-sm bg-white border">
+      <thead class="bg-gray-200">
+        <tr>
+          <th class="text-left p-3">Invoice #</th>
+          <th class="text-left p-3">Date</th>
+          <th class="text-left p-3">Receiver</th>
+          <th class="text-left p-3">Total</th>
+          <th class="text-left p-3">Paid</th>
+          <th class="text-left p-3">Balance</th>
+          <th class="text-left p-3">Status</th>
+<th class="text-left p-3">Tracking</th>
+          <th class="text-left p-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="invoiceTable"></tbody>
+    </table>
+
+    <div class="mt-6">
+      <a id="backBtn" href="#" class="bg-green-600 text-white px-4 py-2 rounded">Back to Customer</a>
+    </div>
+  </div>
+
+  <script>
+    const customerId = new URLSearchParams(window.location.search).get('customerId');
+    let editingInvoiceId = null; // New variable to track edit mode
+    
+    let actionToken = null;
+
+  async function fetchActionToken() {
+    try {
+      const res = await fetch('/api/get-action-token', { credentials: 'include' });
+      if (!res.ok) {
+        console.error('Failed to fetch action token');
+        return;
+      }
+      const data = await res.json();
+      actionToken = data.actionToken;
+    } catch (err) {
+      console.error('Error getting action token', err);
+    }
+  }
+
+    function showToast(msg, success = true) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = `fixed top-4 right-4 px-4 py-2 rounded shadow z-50 ${success ? 'bg-green-600' : 'bg-red-600'} text-white`;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+    
+    async function loadInvoices() {
+      const res = await fetch(`/invoices/${customerId}`);
+      const data = await res.json();
+      const tbody = document.getElementById('invoiceTable');
+      tbody.innerHTML = '';
+    
+      let totalSum = 0, paidSum = 0, balanceSum = 0;
+      let paidCount = 0, partialCount = 0, unpaidCount = 0;
+    
+      data.forEach(inv => {
+        const balance = (inv.TotalAmount - inv.AmountPaid).toFixed(2);
+        totalSum += parseFloat(inv.TotalAmount);
+        paidSum += parseFloat(inv.AmountPaid);
+        balanceSum += parseFloat(balance);
+    
+        if (inv.Status === 'Paid') paidCount++;
+        else if (inv.Status === 'Partial') partialCount++;
+        else unpaidCount++;
+    
+        const statusClass = inv.Status === 'Paid' ? 'text-green-600' : inv.Status === 'Partial' ? 'text-yellow-600' : 'text-red-600';
+    
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="p-3">${inv.InvoiceNumber}</td>
+          <td class="p-3">${inv.InvoiceDate}</td>
+          <td class="p-3">${inv.ReceiverName}</td>
+          <td class="p-3">${inv.TotalAmount.toFixed(2)}</td>
+          <td class="p-3">${inv.AmountPaid.toFixed(2)}</td>
+          <td class="p-3">${balance}</td>
+          <td class="p-3 font-semibold ${statusClass}">${inv.Status}</td>
+<td class="p-3" id="track-${inv.InvoiceID}">⏳</td>
+          <td class="p-3 space-y-1">
+            <a href="/invoice-items?invoiceId=${inv.InvoiceID}" class="text-blue-600 block underline">🧾 Items</a>
+            <a href="/invoice-payments?invoiceId=${inv.InvoiceID}" class="text-purple-600 block underline">💰 Payments</a>
+            <button onclick="viewInvoice(${inv.InvoiceID})" class="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded w-full mt-1">🖨️ Print/Send</button>
+<a href="/invoice-message.html?invoiceId=${inv.InvoiceID}" target="_blank"
+   class="bg-slate-600 hover:bg-slate-700 text-white px-2 py-1 rounded w-full mt-1 block text-center">
+  📤 Send to Freetown
+</a>
+
+            <button onclick="startEditInvoice(${inv.InvoiceID})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded w-full mt-1">✏️ Edit</button>
+                <button onclick="deleteInvoice(${inv.InvoiceID})" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded w-full mt-1">🗑️ Delete</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+fetch(`/invoices/tracking-summary/${inv.InvoiceID}`)
+          .then(res => res.json())
+          .then(data => {
+            document.getElementById(`track-${inv.InvoiceID}`).textContent = data.summary;
+          })
+          .catch(() => {
+            document.getElementById(`track-${inv.InvoiceID}`).textContent = '❌';
+          });
+      });
+    
+      document.getElementById('sumTotal').textContent = totalSum.toFixed(2);
+      document.getElementById('sumPaid').textContent = paidSum.toFixed(2);
+      document.getElementById('sumBalance').textContent = balanceSum.toFixed(2);
+      document.getElementById('countPaid').textContent = paidCount;
+      document.getElementById('countPartial').textContent = partialCount;
+      document.getElementById('countUnpaid').textContent = unpaidCount;
+    }
+
+    document.getElementById('searchInput').addEventListener('input', function () {
+      const searchTerm = this.value.toLowerCase();
+      const rows = document.querySelectorAll('#invoiceTable tr');
+
+      rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        row.style.display = text.includes(searchTerm) ? '' : 'none';
+      });
+    });
+
+
+    async function loadCustomerLabel() {
+      const res = await fetch(`/customer/${customerId}`);
+      const data = await res.json();
+      document.getElementById('customerLabel').textContent = `${data['First Name'] || ''} ${data['Last Name'] || ''} (${data['Post Code'] || ''})`;
+    }
+
+    loadCustomerLabel();
+    
+    function viewInvoice(invoiceId) {
+      window.open(`/invoice-detail.html?invoiceId=${invoiceId}`, '_blank');
+    }
+    
+    async function startEditInvoice(invoiceId) {
+      const res = await fetch(`/invoices/single/${invoiceId}`);
+      const data = await res.json();
+      const invoice = data.invoice;
+    
+      document.querySelector('[name="InvoiceDate"]').value = invoice.InvoiceDate || '';
+      document.querySelector('[name="ReceiverName"]').value = invoice.ReceiverName || '';
+      document.querySelector('[name="Email"]').value = invoice.Email || '';
+      document.querySelector('[name="Phone1"]').value = invoice.Phone1 || '';
+      document.querySelector('[name="Phone2"]').value = invoice.Phone2 || '';
+      document.querySelector('[name="Phone3"]').value = invoice.Phone3 || '';
+      document.querySelector('[name="Address1"]').value = invoice.Address1 || '';
+      document.querySelector('[name="Address2"]').value = invoice.Address2 || '';
+      document.querySelector('[name="PostCode"]').value = invoice.PostCode || '';
+      document.querySelector('[name="Country"]').value = invoice.Country || '';
+      document.querySelector('[name="Notes"]').value = invoice.Notes || '';
+    
+      document.getElementById('DeliveryCheckbox').checked = invoice.Delivery === 1;
+
+      document.querySelector('#invoiceForm button[type="submit"]').textContent = 'Save Details';
+      editingInvoiceId = invoiceId;
+    }
+    
+    document.getElementById('invoiceForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const form = e.target;
+
+  // Ensure Delivery always has a value (1 or 0)
+  if (!document.getElementById('DeliveryCheckbox').checked) {
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = 'Delivery';
+    hidden.value = '0';
+    form.appendChild(hidden);
+  }
+
+  if (!actionToken) {
+    showToast('Security token missing. Please reload the page.', false);
+    return;
+  }
+
+  const formData = new URLSearchParams(new FormData(form)).toString();
+  const targetUrl = editingInvoiceId
+    ? `/invoices/update/${editingInvoiceId}`
+    : `/invoices/${customerId}`;
+
+  try {
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Action-Token': actionToken      // 🔐 send token
+      },
+      body: formData
+    });
+
+    if (res.status === 403) {
+      showToast('Security token expired. Please reload the page and try again.', false);
+      // Optional: refresh token in background
+      await fetchActionToken();
+      return;
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.error('Invoice save failed:', text);
+      showToast('Failed to save invoice', false);
+      return;
+    }
+
+    showToast(editingInvoiceId ? 'Invoice updated' : 'Invoice created');
+    form.reset();
+    document.querySelector('#invoiceForm button[type="submit"]').textContent = 'Create Invoice';
+    editingInvoiceId = null;
+    loadInvoices();
+    // Optional: rotate token after successful write
+    await fetchActionToken();
+  } catch (err) {
+    console.error('Error saving invoice:', err);
+    showToast('Failed to save invoice', false);
+  }
+});
+
+
+    async function deleteInvoice(invoiceId) {
+  if (!confirm('Delete this invoice?')) return;
+
+  if (!actionToken) {
+    showToast('Security token missing. Please reload the page.', false);
+    return;
+  }
+
+  try {
+    const res = await fetch(`/invoices/${invoiceId}`, {
+      method: 'DELETE',
+      headers: {
+        'X-Action-Token': actionToken      // 🔐 send token
+      }
+    });
+
+    if (res.status === 403) {
+      showToast('Security token expired. Please reload the page and try again.', false);
+      await fetchActionToken();
+      return;
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.error('Invoice delete failed:', text);
+      showToast('Failed to delete invoice', false);
+      return;
+    }
+
+    showToast('Invoice deleted');
+    loadInvoices();
+    await fetchActionToken();  // optional token rotation
+  } catch (err) {
+    console.error('Error deleting invoice:', err);
+    showToast('Failed to delete invoice', false);
+  }
+}
+    
+    document.getElementById('backBtn').href = `/view-customer?id=${customerId}`;
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+  await fetchActionToken();       // 🔐 get token for this session
+  await loadInvoices();           // existing function
+});
+
+    document.querySelector('[name="InvoiceDate"]').value = new Date().toISOString().split('T')[0];
+
+  </script>    
+</body>
+</html>

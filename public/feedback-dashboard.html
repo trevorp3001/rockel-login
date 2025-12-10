@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feedback Dashboard | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  <div class="max-w-5xl mx-auto bg-white p-6 rounded shadow">
+    <h1 class="text-3xl font-bold mb-6">📋 Feedback Dashboard</h1>
+
+    <button onclick="downloadCSV('feedbackSummaryTable')" class="mb-4 bg-green-600 text-white px-3 py-1 rounded">Download CSV</button>
+
+    <table id="feedbackSummaryTable" class="min-w-full text-sm border">
+      <thead class="bg-gray-200">
+        <tr>
+          <th class="p-2">Query Type</th>
+          <th>Status</th>
+          <th>Count</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+async function loadFeedbackSummary() {
+  const res = await fetch('/api/reports/feedback-summary');
+  const data = await res.json();
+
+  const tbody = document.querySelector('#feedbackSummaryTable tbody');
+  tbody.innerHTML = '';
+  data.forEach(f => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${f.QueryType}</td>
+      <td>${f.Status}</td>
+      <td>${f.Count}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+loadFeedbackSummary();
+</script>
+</body>
+</html>

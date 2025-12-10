@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Partially Shipped Invoices</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  <h1 class="text-2xl font-bold mb-4">Partially Shipped Invoices</h1>
+
+  <div class="mb-4">
+    <label for="containerDropdown" class="block font-medium text-gray-700 mb-1">Select Container for Shipment</label>
+    <select id="containerDropdown" class="w-full border rounded p-2">
+      <option value="">-- Select Container --</option>
+    </select>
+  </div>
+
+  <input type="text" id="invoiceSearch" placeholder="Search Invoice Number..." class="w-full p-2 border rounded mb-4" oninput="filterInvoices()" />
+
+  <table class="min-w-full bg-white shadow rounded text-sm mb-6">
+    <thead class="bg-gray-200">
+      <tr>
+        <th class="text-left p-3">Invoice #</th>
+        <th class="text-left p-3">Date</th>
+        <th class="text-left p-3">Receiver</th>
+        <th class="text-left p-3">Total</th>
+        <th class="text-left p-3">Paid</th>
+        <th class="text-left p-3">Balance</th>
+        <th class="text-left p-3">Payment Status</th>
+        <th class="text-left p-3">Action</th>
+      </tr>
+    </thead>
+    <tbody id="invoiceTable"></tbody>
+  </table>
+
+  <div id="results" class="max-w-4xl"></div>
+
+  <script>
+    let containerSelectValue = '';
+
+    async function loadEligibleContainers() {
+  try {
+    const res = await fetch('/containers/eligible');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const containers = await res.json();
+    console.log('✅ Parsed containers:', containers);
+
+    if (!Array.isArray(containers)) throw new Error('Response is not an array');
+
+    const dropdown = document.getElementById('containerDropdown');
+    dropdown.innerHTML = '<option value="">Select container</option>';
+    containers.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.ContainerID;
+      opt.textContent = `ID ${c.ContainerID} - ${c.ContainerNumber}${c.Vessel ? ' ('+c.Vessel+')' : ''}`;
+      dropdown.appendChild(opt);
+    });
+  } catch (err) {
+    console.error('❌ Failed to load eligible containers:', err);
+    alert('Error loading container list. Please check the server logs or refresh the page.');
+  }
+}
+
+    async function loadInvoices() {
+      try {
+        const res = await fetch('/invoices/partially-shipped');
+        const data = await res.json();
+        const table = document.getElementById('invoiceTable');
+        table.innerHTML = '';
+
+        data.forEach(inv => {
+          const row = document.createElement('tr');
+          row.className = 'border-t invoice-row';
+          row.setAttribute('data-invoice', inv.InvoiceNumber.toLowerCase());
+          row.innerHTML = `
+            <td class="p-3">${inv.InvoiceNumber}</td>
+            <td class="p-3">${inv.InvoiceDate}</td>
+            <td class="p-3">${inv.ReceiverName}</td>
+            <td class="p-3">£${(inv.TotalAmount || 0).toFixed(2)}</td>
+            <td class="p-3">£${(inv.TotalPaid || 0).toFixed(2)}</td>
+            <td class="p-3">£${(inv.Balance || 0).toFixed(2)}</td>
+            <td class="p-3 ${
+              inv.PaymentStatus === 'Unpaid' ? 'text-red-600 font-semibold' :
+              inv.PaymentStatus === 'Partial' ? 'text-yellow-600 font-semibold' :
+              ''
+            }">
+              ${inv.PaymentStatus || '—'}
+            </td>
+            <td class="p-3">
+              <button class="bg-blue-600 text-white px-3 py-1 rounded" onclick="loadItems(${inv.InvoiceID})">View Items</button>
+            </td>
+          `;
+          table.appendChild(row);
+        });
+      } catch (err) {
+        console.error('❌ Error loading invoices:', err);
+      }
+    }
+
+    function filterInvoices() {
+      const term = document.getElementById('invoiceSearch').value.toLowerCase();
+      document.querySelectorAll('.invoice-row').forEach(row => {
+        row.style.display = row.getAttribute('data-invoice').includes(term) ? '' : 'none';
+      });
+    }
+
+    async function loadItems(invoiceId) {
+      const res = await fetch(`/invoices/partially-loaded-items?invoiceId=${invoiceId}`);
+      const data = await res.json();
+      const div = document.getElementById('results');
+
+      if (!data.length) {
+        div.innerHTML = '<p class="text-red-600">No items to load.</p>';
+        return;
+      }
+
+      let html = `<div class="mb-4 text-right">
+        <button onclick="confirmAll()" class="bg-blue-700 text-white px-4 py-2 rounded">Confirm All</button>
+      </div>`;
+      html += `<table class="min-w-full bg-white shadow rounded text-sm">
+        <thead class="bg-gray-200">
+          <tr>
+            <th class="text-left p-3">Item</th>
+            <th class="text-left p-3">Qty</th>
+            <th class="text-left p-3">Unit £</th>
+            <th class="text-left p-3">Total £</th>
+            <th class="text-left p-3">QR</th>
+            <th class="text-left p-3">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(i => `
+            <tr class="border-t">
+              <td class="p-3">${i.ItemName}</td>
+              <td class="p-3">${i.Quantity || 1}</td>
+              <td class="p-3">£${parseFloat(i.UnitCost || 0).toFixed(2)}</td>
+              <td class="p-3">£${parseFloat(i.TotalCost || 0).toFixed(2)}</td>
+              <td class="p-3">${i.ItemQR}</td>
+              <td class="p-3">
+                  <button class="bg-green-600 text-white px-3 py-1 rounded confirm-button" onclick="confirmStatus(${i.ItemID}, this.parentNode.parentNode)">Confirm</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>`;
+
+      div.innerHTML = html;
+    }
+
+    async function confirmStatus(itemId, row) {
+    const containerDropdown = document.getElementById('containerDropdown');
+    const containerId = containerDropdown.value;
+
+    if (!containerId) {
+      alert('Please select a container before confirming.');
+      return;
+    }
+
+    const confirmBtn = row.querySelector('.confirm-button');
+    confirmBtn.disabled = true;
+    confirmBtn.innerText = '⏳';
+
+    try {
+      const response = await fetch(`/api/track-item/${itemId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          Stage: 'Shipped',
+          Timestamp: new Date().toISOString(),
+          ContainerID: parseInt(containerId)
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        row.querySelector('.confirm-button').remove();
+        row.insertCell(-1).innerHTML = '<span class="text-green-600 font-bold">Shipped</span>';
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('❌ Failed to update status', error);
+      alert('❌ Failed to update status');
+      confirmBtn.disabled = false;
+      confirmBtn.innerText = 'Confirm';
+    }
+  }
+
+
+   async function confirmAll() {
+    const buttons = document.querySelectorAll('#results .confirm-button');
+    for (const btn of buttons) {
+      const row = btn.closest('tr');
+      const match = btn.getAttribute('onclick').match(/\d+/);
+      if (match) {
+        await confirmStatus(parseInt(match[0]), row);
+      }
+    }
+  }
+
+
+    window.onload = () => {
+    containerSelectValue = '';
+    loadEligibleContainers();
+    loadInvoices();
+
+    // Listen for container selection
+    document.getElementById('containerDropdown').addEventListener('change', function () {
+      containerSelectValue = this.value;
+    });
+  };
+  </script>
+</body>
+</html>

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rockel Shipping - Pay Invoice</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .pay-container {
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .pay-container h1 {
+      text-align: center;
+      color: #003366;
+      margin-bottom: 20px;
+    }
+    .invoice-info {
+      margin-bottom: 20px;
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 6px;
+    }
+    .pay-btn {
+      display: block;
+      width: 100%;
+      margin-top: 20px;
+      background: #28a745;
+    }
+    .pay-btn:hover {
+      background: #218838;
+    }
+    .referral-box {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 6px;
+      background: #ecfdf3;
+      border: 1px solid #bbf7d0;
+      font-size: 0.9rem;
+    }
+    .referral-box h2 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+      color: #15803d;
+    }
+    .referral-box button {
+      margin-top: 8px;
+      background: #16a34a;
+      border: none;
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .referral-box button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+<header class="portal-header">
+  <a href="https://www.rockelshippingcompany.com" target="_blank" class="logo-link">
+    <img src="images/rockellogo.png" alt="Rockel Shipping Logo" class="logo">
+  </a>
+  <h2>Customer Portal</h2>
+</header>
+
+<ul>
+  <li><a href="https://www.rockelshippingcompany.com">Go back to RockelShippingCompany.com</a></li>
+  <li><a href="/portal/logout">Logout</a></li>
+</ul>
+
+<div class="pay-container">
+  <h1>Pay Invoice</h1>
+
+  <div class="invoice-info">
+    <p><strong>Invoice Number:</strong> <span id="invoiceNumber"></span></p>
+    <p><strong>Amount Due (£):</strong> <span id="invoiceBalance"></span></p>
+  </div>
+
+  <!-- 🔹 Referral credit panel -->
+  <div id="referralBox" class="referral-box" style="display:none;">
+    <h2>Referral Credit</h2>
+    <p>
+      Available credit: £<span id="refCreditAvailable">0.00</span><br>
+      Current amount due: £<span id="refCreditDue">0.00</span>
+    </p>
+    <p style="margin-top:6px;">
+      We can automatically apply up to your available credit to this invoice.
+    </p>
+    <button id="btnUseCredit">Use referral credit on this invoice</button>
+    <p id="refCreditMsg" style="margin-top:6px; color:#166534;"></p>
+  </div>
+
+  <p style="margin-top:20px;">Choose your payment option:</p>
+  <ul>
+    <li>Bank: Rockel Bank Ltd</li>
+    <li>Sort Code: 12-34-56</li>
+    <li>Account: 12345678</li>
+  </ul>
+  <p>If you pay by bank please call 02085956688 to confirm.</p>
+
+  <button class="pay-btn" onclick="mockPay()">💳 Pay with Card</button>
+  <p id="statusMsg" style="margin-top:15px; font-weight:bold; color:green; display:none;"></p>
+</div>
+
+<script>
+  /**
+   * TODO: Stripe/Payment Integration
+   * - Replace mockPay() with fetch('/api/portal/pay/:invoiceId') that calls Stripe backend
+   * - After payment success, redirect back to /portal-invoices.html
+   */
+
+  const invoiceId  = localStorage.getItem('invoiceId');
+  const customerId = localStorage.getItem('customerId');
+
+  async function loadInvoiceDetails() {
+    if (!invoiceId || !customerId) {
+      window.location.href = '/portal-invoices.html';
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/portal/${customerId}/invoices`);
+      const invoices = await res.json();
+      const invoice = invoices.find(i => String(i.InvoiceID) === String(invoiceId));
+      if (invoice) {
+        document.getElementById('invoiceNumber').innerText = invoice.InvoiceNumber;
+        document.getElementById('invoiceBalance').innerText = invoice.balance;
+        await loadReferralCredit(invoice.balance);
+      } else {
+        const msg = document.getElementById('statusMsg');
+        msg.style.display = 'block';
+        msg.style.color = 'red';
+        msg.innerText = 'Invoice not found.';
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error loading invoice details.');
+    }
+  }
+
+  async function loadReferralCredit(currentBalance) {
+    const box = document.getElementById('referralBox');
+    const msgEl = document.getElementById('refCreditMsg');
+    msgEl.textContent = '';
+
+    if (!customerId) {
+      box.style.display = 'none';
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/portal/${customerId}/referral-credit`);
+      if (!res.ok) {
+        box.style.display = 'none';
+        return;
+      }
+
+      const credit = await res.json();
+      const available = Number(credit.available || 0);
+      const balance = Number(currentBalance || 0);
+
+      document.getElementById('refCreditAvailable').textContent = available.toFixed(2);
+      document.getElementById('refCreditDue').textContent       = balance.toFixed(2);
+
+      const btn = document.getElementById('btnUseCredit');
+
+      if (available > 0 && balance > 0) {
+        box.style.display = 'block';
+        btn.disabled = false;
+      } else {
+        box.style.display = 'none';
+      }
+    } catch (err) {
+      console.error('Error loading referral credit', err);
+      box.style.display = 'none';
+    }
+  }
+
+  async function applyReferralCredit() {
+    const btn   = document.getElementById('btnUseCredit');
+    const msgEl = document.getElementById('refCreditMsg');
+    btn.disabled = true;
+    msgEl.style.color = '#166534';
+    msgEl.textContent = 'Applying referral credit...';
+
+    try {
+      // We let the backend choose how much to apply (min(available, balance))
+      const res = await fetch(`/api/portal/${customerId}/apply-referral-credit/${invoiceId}`, {
+        method: 'POST'
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.success) {
+        msgEl.style.color = 'red';
+        msgEl.textContent = data.error || 'Failed to apply referral credit.';
+        btn.disabled = false;
+        return;
+      }
+
+      const applied = Number(data.applied || 0);
+      msgEl.style.color = '#166534';
+      msgEl.textContent = `£${applied.toFixed(2)} referral credit applied to this invoice.`;
+
+      // Refresh invoice details & credit panel with new balance
+      await loadInvoiceDetails();
+    } catch (err) {
+      console.error('Error applying referral credit', err);
+      msgEl.style.color = 'red';
+      msgEl.textContent = 'Error applying referral credit.';
+      btn.disabled = false;
+    }
+  }
+
+  async function mockPay() {
+    if (!invoiceId) {
+      alert('No invoice selected.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/portal/pay/${invoiceId}`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const msg = document.getElementById('statusMsg');
+        msg.style.display = 'block';
+        msg.style.color = 'green';
+        msg.innerText = data.message || 'Payment successful';
+        setTimeout(() => {
+          window.location.href = '/portal-invoices.html';
+        }, 2000);
+      } else {
+        alert(data.error || 'Payment failed');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Payment request failed.');
+    }
+  }
+
+  // Wire up referral credit button
+  document.getElementById('btnUseCredit').addEventListener('click', applyReferralCredit);
+
+  // Initial load
+  loadInvoiceDetails();
+</script>
+</body>
+</html>

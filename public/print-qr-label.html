@@ -1,0 +1,89 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Print QR Label</title>
+  <style>
+    @media print {
+      .label {
+        width: 2in;
+        height: 2in;
+        font-size: 8px;
+        padding: 4px;
+        page-break-after: always;
+      }
+    }
+    .label {
+      width: 2in;
+      height: 2in;
+      border: 1px solid #ccc;
+      margin: 20px auto;
+      padding: 4px;
+      text-align: center;
+      font-family: sans-serif;
+      font-size: 8px;
+    }
+    img {
+      max-width: 80%;
+      height: auto;
+    }
+    .info {
+      margin-top: 3px;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      font-size: 8px;
+      line-height: 1.1em;
+    }
+  </style>
+</head>
+<body>
+  <div class="label" id="label">
+    <img id="qrImage" src="" alt="QR Code" />
+    <div class="info">
+      <div id="itemName">Item name</div>
+      <div id="invoiceNumber">Invoice:</div>
+      <div id="itemQR">Item QR:</div>
+    </div>
+  </div>
+
+  <div class="no-print" style="text-align:center; margin-top: 20px;">
+    <button onclick="window.print()">🖨️ Print Label</button>
+    <label for="copyCount">Copies:</label>
+    <input id="copyCount" type="number" value="1" min="1" max="20" />
+    <button onclick="printMultiple()">Print Multiple</button>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const itemId = params.get("itemId");
+
+    fetch(`/api/item/${itemId}`)
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById("itemName").textContent = data.ItemName || '';
+        document.getElementById("invoiceNumber").textContent = 'Invoice: ' + (data.InvoiceNumber || '');
+        document.getElementById("itemQR").textContent = 'Item: ' + (data.ItemQR || '');
+        document.getElementById("qrImage").src = `/qr/item/${itemId}`;
+      });
+
+    function printMultiple() {
+      const count = parseInt(document.getElementById('copyCount').value);
+      if (isNaN(count) || count < 1) return;
+
+      const label = document.getElementById('label');
+      const clones = [];
+
+      for (let i = 0; i < count - 1; i++) {
+        const clone = label.cloneNode(true);
+        clone.style.pageBreakBefore = "always";
+        document.body.insertBefore(clone, document.querySelector('.no-print'));
+        clones.push(clone);
+      }
+
+      window.print();
+      clones.forEach(el => el.remove());
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rockel Shipping - Customer Portal Login</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="portal-header">
+    <a href="https://www.rockelshippingcompany.com" target="_blank" class="logo-link">
+      <img src="images/rockellogo.png" alt="Rockel Shipping Logo" class="logo">
+    </a>
+    <h2>Customer Portal</h2>
+  </header>
+
+  <div class="login-container">
+    <h1>Customer Portal Login</h1>
+    <!-- ✅ Updated form ID -->
+    <form id="portalLoginForm" class="form-responsive">
+      <label for="postcode">Postcode</label>
+      <input type="text" id="postcode" name="postcode" required>
+
+      <label for="invoiceNumber">Invoice Number</label>
+      <input type="text" id="invoiceNumber" name="invoiceNumber" required>
+
+      <button type="submit">Login</button>
+    </form>
+
+    <p id="error" style="color:red; display:none;"></p>
+  </div>
+
+  <script>
+    // ✅ Updated form ID
+    document.getElementById('portalLoginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const postcode = document.getElementById('postcode').value.trim();
+      const invoiceNumber = document.getElementById('invoiceNumber').value.trim();
+      const errorElem = document.getElementById('error');
+
+      if (!postcode || !invoiceNumber) {
+        errorElem.style.display = 'block';
+        errorElem.innerText = 'Please enter both postcode and invoice number.';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/portal/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ postcode, invoiceNumber })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          errorElem.style.display = 'block';
+          errorElem.innerText = data.error || 'Login failed, please check your details.';
+          return;
+        }
+
+        // ✅ Save session info for later use
+        localStorage.setItem('customerId', data.customerId);
+        window.location.href = '/portal-invoices.html';
+      } catch (err) {
+        console.error('Login request failed:', err);
+        errorElem.style.display = 'block';
+        errorElem.innerText = 'Network error, please try again.';
+      }
+    });
+  </script>
+</body>
+</html>

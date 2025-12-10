@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Batch Scan</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  
+  <div id="toast" class="fixed top-4 right-4 hidden px-4 py-2 text-white rounded shadow z-50"></div>
+  <audio id="beep-success" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg" preload="auto"></audio>
+  <audio id="beep-fail" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
+
+  <h1 class="text-2xl font-bold mb-6">Batch Scan & Confirm</h1>
+
+  <div class="bg-white rounded shadow p-4 max-w-xl mb-6">
+    <label class="block font-semibold mb-1">Scan QR or Enter Invoice Number:</label>
+    <input id="scanInput" type="text" class="w-full border p-2 rounded mb-2" placeholder="Scan item QR or enter invoice number" oninput="autoConfirmFromInput()" />
+    <button onclick="startCameraScan()" class="bg-gray-700 text-white px-3 py-1 rounded mt-2">📷 Scan with Camera</button>
+    <div id="reader" class="mb-4" style="width: 300px;"></div>
+
+    <label class="block font-semibold mb-1">Select Tracking Stage:</label>
+    <select id="stageSelect" class="w-full p-2 border rounded mb-4">
+      <option value="Picked up">Picked up</option>
+      <option value="Received (London)">Received (London)</option>
+      <option value="Shipped">Shipped</option>
+      <option value="Arrived (Freetown)">Arrived (Freetown)</option>
+      <option value="Collected (Customer)">Collected (Customer)</option>
+      <option value="Delivered">Delivered</option>
+    </select>
+
+    <div id="containerBlock" class="mb-4 hidden">
+      <label class="block font-semibold mb-1">Select Container (for Shipped only):</label>
+      <select id="containerDropdown" class="w-full border p-2 rounded"></select>
+    </div>
+
+    <button onclick="lookupScan()" class="bg-blue-600 text-white px-4 py-2 rounded">Lookup</button>
+  </div>
+
+  <div id="resultBox" class="max-w-4xl"></div>
+
+  <script>
+    let ACTION_TOKEN = null;
+
+async function fetchActionToken() {
+  try {
+    const res = await fetch('/api/get-action-token');
+    if (!res.ok) throw new Error('Failed to fetch action token');
+    const data = await res.json();
+    ACTION_TOKEN = data.actionToken;
+  } catch (err) {
+    console.error('❌ Failed to load action token:', err);
+    showToast('Security token error – please refresh the page', false);
+  }
+}
+
+window.addEventListener('load', () => {
+  fetchActionToken();
+});
+
+
+    const stageSelect = document.getElementById('stageSelect');
+    const containerBlock = document.getElementById('containerBlock');
+    const containerDropdown = document.getElementById('containerDropdown');
+
+    stageSelect.addEventListener('change', () => {
+      if (stageSelect.value === 'Shipped') {
+        containerBlock.classList.remove('hidden');
+        fetch('/containers/eligible')
+          .then(res => res.json())
+          .then(data => {
+            containerDropdown.innerHTML = '';
+            data.forEach(c => {
+              const opt = document.createElement('option');
+              opt.value = c.ContainerID;
+              opt.textContent = `${c.ContainerID} - ${c.ContainerNumber || 'N/A'} - ${c.Vessel || ''}`;
+              containerDropdown.appendChild(opt);
+            });
+          });
+      } else {
+        containerBlock.classList.add('hidden');
+      }
+    });
+
+    function showToast(msg, isSuccess = true) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = `fixed top-4 right-4 px-4 py-2 rounded shadow z-50 ${isSuccess ? 'bg-green-600' : 'bg-red-600'} text-white`;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+      const audio = document.getElementById(isSuccess ? 'beep-success' : 'beep-fail');
+      if (audio) audio.play();
+    }
+
+    function startCameraScan() {
+      const qrScanner = new Html5Qrcode("reader");
+      qrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        qrCodeMessage => {
+          document.getElementById('scanInput').value = qrCodeMessage;
+          autoConfirmFromInput();
+        },
+        errorMessage => { }
+      ).catch(err => console.error("Camera scan failed:", err));
+    }
+
+    function autoConfirmFromInput() {
+      const value = document.getElementById('scanInput').value.trim();
+      if (!value || value.length < 3) return;
+
+      let qr = '';
+      if (value.includes('itemId=')) {
+        try {
+          const url = new URL(value);
+          const id = url.searchParams.get('itemId');
+          if (id) qr = id;
+        } catch { qr = ''; }
+      } else if (!isNaN(value)) {
+        qr = value;
+      }
+
+      if (!qr) return;
+
+      const stage = stageSelect.value;
+      const payload = { Stage: stage };
+      if (stage === 'Shipped') payload.ContainerID = containerDropdown?.value;
+
+      fetch(`/api/track-lookup?qr=${qr}`)
+        .then(res => res.json())
+        .then(async items => {
+          if (!items.length) return showToast("❌ No item found", false);
+          const itemId = items[0].ItemID;
+
+          // ⚠ Confirm if shipping unpaid item
+          if (stage === 'Shipped' && items[0].InvoiceStatus !== 'Paid') {
+            const confirmed = confirm(`⚠ This invoice is marked as ${items[0].InvoiceStatus} payment. Are you sure you want to mark this item as shipped?`);
+            if (!confirmed) return;
+          }
+
+          const res = await fetch(`/api/track-item/${itemId}`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Action-Token': ACTION_TOKEN || ''
+  },
+  body: JSON.stringify(payload)
+});
+
+
+
+          const result = await res.json();
+          if (res.ok) {
+            showToast(result.message || `✅ Item ${itemId} confirmed`);
+            document.getElementById('scanInput').value = '';
+            document.getElementById('scanInput').focus();
+          } else {
+            showToast(result.message || `❌ Failed for ${itemId}`, false);
+          }
+        }).catch(() => showToast('❌ Error during confirmation', false));
+    }
+
+    async function lookupScan() {
+      const raw = document.getElementById('scanInput').value.trim();
+      let qr = '', invoice = '';
+
+      if (raw.includes('itemId=')) {
+        try {
+          const url = new URL(raw);
+          const id = url.searchParams.get('itemId');
+          if (id) qr = id;
+        } catch (e) { console.warn('Invalid QR format:', raw); }
+      } else if (!isNaN(raw)) {
+        qr = raw;
+      } else if (raw.length >= 5) {
+        invoice = raw;
+      }
+
+      const res = await fetch(`/api/track-lookup?qr=${qr}&invoice=${invoice}`);
+      const data = await res.json();
+
+      if (!data.length) {
+        document.getElementById('resultBox').innerHTML = '<p class="text-red-600 font-semibold">No item(s) found</p>';
+        return;
+      }
+
+      let html = '';
+      if (data.length > 1) {
+        html += `<div class="mb-4 text-right">
+          <button onclick="confirmAll()" class="bg-blue-700 text-white px-4 py-2 rounded">Confirm All</button>
+        </div>`;
+      }
+
+      html += `<table class="w-full text-sm bg-white shadow rounded mt-4">
+        <thead class="bg-gray-200">
+          <tr class="border-t">
+            <th class="p-2">Item</th>
+            <th class="p-2">Invoice</th>
+            <th class="p-2">Qty</th>
+            <th class="p-2">Unit £</th>
+            <th class="p-2">Total £</th>
+            <th class="p-2">Status</th>
+            <th class="p-2">QR</th>
+            <th class="p-2">Action</th>
+          </tr>
+        </thead><tbody>`;
+
+      for (const item of data) {
+        const statusColor = item.InvoiceStatus === 'Paid' ? 'bg-green-600' :
+                            item.InvoiceStatus === 'Partial' ? 'bg-yellow-500' : 'bg-red-600';
+
+        html += `<tr class="border-t">
+          <td class="p-2">${item.ItemName}</td>
+          <td class="p-2">${item.InvoiceNumber}</td>
+          <td class="p-2">${item.Quantity || 1}</td>
+          <td class="p-2">£${parseFloat(item.UnitCost || 0).toFixed(2)}</td>
+          <td class="p-2">£${parseFloat((item.Quantity || 1) * (item.UnitCost || 0)).toFixed(2)}</td>
+          <td class="p-2 text-white font-semibold ${statusColor}">${item.InvoiceStatus || ''}</td>
+          <td class="p-2">${item.ItemQR}</td>
+          <td class="p-2">
+            <button class="bg-green-600 text-white px-3 py-1 rounded" onclick="confirmStatus(${item.ItemID})">Confirm</button>
+            <button class="bg-yellow-600 text-white px-3 py-1 rounded ml-2" onclick="toggleNote(${item.ItemID})">Confirm with Note</button>
+            <div id="noteBox-${item.ItemID}" class="mt-2 hidden">
+              <textarea id="noteInput-${item.ItemID}" class="w-full border p-1 mt-1" placeholder="Enter note here..."></textarea>
+              <button class="bg-blue-600 text-white px-2 py-1 mt-1 rounded" onclick="confirmStatus(${item.ItemID}, true)">Submit Note</button>
+            </div>
+          </td>
+        </tr>`;
+      }
+
+      html += '</tbody></table>';
+      document.getElementById('resultBox').innerHTML = html;
+    }
+
+      
+    async function confirmStatus(itemId, withNote = false) {
+      const payload = { Stage: stage };  // Or stageSelect?.value depending on file
+      if (stage === 'Shipped') {
+        payload.ContainerID = document.getElementById('containerDropdown')?.value;
+      }
+
+      if (withNote) {
+        const noteEl = document.getElementById(`noteInput-${itemId}`);
+        if (noteEl) {
+          const note = noteEl.value.trim();
+          if (note) payload.Notes = note;
+        }
+      }
+
+      const res = await fetch(`/api/track-item/${itemId}`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Action-Token': ACTION_TOKEN || ''
+  },
+  body: JSON.stringify(payload)
+});
+
+
+      const result = await res.json();
+      if (res.ok) {
+        showToast(result.message || '✅ Status updated!');
+        const row = document.querySelector(`button[onclick="confirmStatus(${itemId})"]`)?.closest('tr');
+        if (row) row.remove();
+      } else {
+        showToast(result.message || '❌ Failed to update status', false);
+      }
+    }
+
+
+    async function confirmAll() {
+      const rows = document.querySelectorAll('#resultBox table tbody tr');
+      for (const row of rows) {
+        const itemId = row.querySelector('button')?.getAttribute('onclick')?.match(/\d+/)?.[0];
+        if (!itemId) continue;
+
+        const statusCell = row.querySelector('td:nth-child(6)');
+        const status = statusCell?.textContent.trim();
+
+        if (stageSelect.value === 'Shipped' && status !== 'Paid') {
+          const confirmed = confirm(`⚠ Invoice for item ${itemId} is marked as ${status}. Are you sure you want to mark it as shipped?`);
+          if (!confirmed) continue;
+        }
+
+        const payload = { Stage: stageSelect?.value };
+        if (stageSelect.value === 'Shipped') payload.ContainerID = containerDropdown?.value;
+
+        const res = await fetch(`/api/track-item/${itemId}`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Action-Token': ACTION_TOKEN || ''
+  },
+  body: JSON.stringify(payload)
+});
+
+
+        const result = await res.json();
+        if (res.ok) {
+          showToast(result.message || `✅ Item ${itemId} confirmed`);
+          if (result.confirmedCount >= result.total) row.remove();
+        } else {
+          showToast(result.message || `❌ Item ${itemId} failed`, false);
+        }
+      }
+    }
+
+    window.onload = () => {
+      stageSelect.dispatchEvent(new Event('change'));
+    };
+  </script>
+</body>
+</html>

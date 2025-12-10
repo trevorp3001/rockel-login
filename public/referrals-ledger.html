@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Referral Reward Ledger</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script>
+    async function loadLedger() {
+      const res = await fetch('/api/referrals/ledger');
+      const data = await res.json();
+      const table = document.getElementById('ledgerBody');
+      table.innerHTML = '';
+
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="border px-4 py-2">${row.CreatedAt}</td>
+          <td class="border px-4 py-2">${row.CustomerName || '—'}</td>
+          <td class="border px-4 py-2">${row.Type}</td>
+          <td class="border px-4 py-2">${row.InvoiceID || '—'}</td>
+          <td class="border px-4 py-2">£${row.Amount}</td>
+          <td class="border px-4 py-2">${row.Status}</td>
+        `;
+        table.appendChild(tr);
+      });
+    }
+
+    function exportCSV() {
+      const rows = Array.from(document.querySelectorAll('#ledgerTable tr'));
+      const csv = rows.map(row => Array.from(row.children).map(cell => cell.innerText));
+      const csvString = Papa.unparse(csv);
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'referral-reward-ledger.csv';
+      a.click();
+    }
+
+    window.onload = loadLedger;
+  </script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="p-6">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  <h1 class="text-2xl font-bold mb-4">Referral Reward Ledger</h1>
+
+  <button onclick="exportCSV()" class="mb-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded">Download CSV</button>
+
+  <div class="overflow-auto">
+    <table id="ledgerTable" class="table-auto border-collapse w-full">
+      <thead>
+        <tr class="bg-gray-100">
+          <th class="border px-4 py-2">Date</th>
+          <th class="border px-4 py-2">Customer</th>
+          <th class="border px-4 py-2">Type</th>
+          <th class="border px-4 py-2">Invoice</th>
+          <th class="border px-4 py-2">£ Earned</th>
+          <th class="border px-4 py-2">Status</th>
+        </tr>
+      </thead>
+      <tbody id="ledgerBody"></tbody>
+    </table>
+  </div>
+</body>
+</html>

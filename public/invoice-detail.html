@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoice Detail | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      .no-print {
+        display: none;
+      }
+    }
+    </style>   
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+    <div class="flex justify-between items-center mb-4">
+      <h1 class="text-2xl font-bold">Invoice Detail</h1>
+      <div class="space-x-2">
+        <button onclick="window.print()" class="no-print bg-blue-600 text-white px-4 py-2 rounded">🖨️ Print</button>
+        <button onclick="sendInvoiceEmail(invoiceId)" 
+                class="no-print bg-green-600 text-white px-4 py-2 rounded">
+          📧 Email
+        </button>
+      </div>      
+    </div>
+
+    <div class="mb-6">
+      <h3 class="font-semibold mb-2">Invoice QR Code</h3>
+      <img id="invoiceQR" src="" alt="Invoice QR" class="border p-2 rounded shadow" />
+    </div>    
+
+    <div class="mb-4">
+      <h2 class="text-xl font-semibold">Invoice Info</h2>
+      <p><strong>Invoice Number:</strong> <span id="invoiceNumber"></span></p>
+      <p><strong>Invoice Date:</strong> <span id="invoiceDate"></span></p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+      <div>
+        <h3 class="text-lg font-semibold">London Office</h3>
+        <p id="companyName"></p>
+        <p id="companyAddress"></p>
+        <p id="companyPhones"></p>
+        <p id="companyEmail"></p>
+        <p id="companyWebsite"></p>
+      </div>
+      <div>
+        <h3 class="text-lg font-semibold">Freetown Office</h3>
+        <p id="FreetownAddress"></p>
+        <p id="FreetownPhone1"></p>
+        <p id="FreetownPhone2"></p>
+      </div>
+      <div>
+        <h3 class="text-lg font-semibold">Sender (Customer)</h3>
+        <p><strong>Name:</strong> <span id="senderName"></span></p>
+        <p><strong>Company:</strong> <span id="senderCompany"></span></p>
+        <p><strong>Address:</strong> <span id="senderAddress"></span></p>
+        <p><strong>Post Code:</strong> <span id="senderPostCode"></span></p>
+        <p><strong>Country:</strong> <span id="senderCountry"></span></p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div>
+        <h3 class="text-lg font-semibold">Receiver</h3>
+        <p><strong>Name:</strong> <span id="receiverName"></span></p>
+        <p><strong>Email:</strong> <span id="email"></span></p>
+        <p><strong>Phone:</strong> <span id="phone"></span></p>
+        <p><strong>Address:</strong> <span id="address"></span></p>
+        <p><strong>Country:</strong> <span id="country"></span></p>
+      </div>
+    </div>
+
+    <div class="mb-6">
+      <h3 class="text-lg font-semibold">Items</h3>
+      <table class="w-full table-auto border">
+        <thead class="bg-gray-200">
+          <tr>
+            <th class="text-left px-2 py-1">Item</th>
+            <th class="text-left px-2 py-1">Description</th>
+            <th class="text-left px-2 py-1">Qty</th>
+            <th class="text-left px-2 py-1">Cost</th>
+            <th class="text-left px-2 py-1">Total</th>
+          </tr>
+        </thead>
+        <tbody id="itemList"></tbody>
+        <tfoot class="font-semibold bg-gray-100">
+          <tr>
+            <td colspan="4" class="text-right px-2 py-1">Subtotal</td>
+            <td class="px-2 py-1" id="subtotal">0.00</td>
+          </tr>
+          <tr>
+            <td colspan="4" class="text-right px-2 py-1">Amount Paid</td>
+            <td class="px-2 py-1" id="amountPaid">0.00</td>
+          </tr>
+          <tr>
+            <td colspan="4" class="text-right px-2 py-1">Outstanding</td>
+            <td class="px-2 py-1" id="balance">0.00</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div class="mb-4">
+      <h3 class="text-lg font-semibold">Notes / Terms</h3>
+      <p id="notes" class="text-xs whitespace-pre-line"></p>
+    </div>
+
+    <div>
+      <h3>Notes / Terms</h3>
+      <p id="terms" class="text-xs whitespace-pre-line"></p>
+    </div>
+
+    
+
+  <script>
+    const invoiceId = new URLSearchParams(window.location.search).get('invoiceId');
+    let actionToken = null;
+
+async function getActionToken() {
+  try {
+    const res = await fetch('/api/get-action-token', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('Failed to fetch action token for invoice-detail');
+      return;
+    }
+    const data = await res.json();
+    actionToken = data.actionToken;
+  } catch (err) {
+    console.error('Error getting action token', err);
+  }
+}
+
+(async () => {
+  await getActionToken();   // 🔐 fetch token first
+  loadReferralInfo();
+  loadInvoiceDetail();
+})();
+
+  
+    async function loadInvoiceDetail() {
+      const [invoiceRes, itemsRes, paymentsRes] = await Promise.all([
+        fetch(`/invoice-details/${invoiceId}`),
+        fetch(`/invoice-items/${invoiceId}`),
+        fetch(`/invoice-payments/${invoiceId}`)
+      ]);
+  
+      const invoice = await invoiceRes.json();
+      const items = await itemsRes.json();
+      const paymentsData = await paymentsRes.json();
+  
+      // Invoice Info
+      document.getElementById('invoiceNumber').textContent = invoice.InvoiceNumber || '—';
+      document.getElementById('invoiceDate').textContent = invoice.InvoiceDate || '—';
+      document.getElementById('invoiceQR').src = `/qr/invoice/${invoice.InvoiceID}`;
+
+  
+      // Company details
+      document.getElementById('companyName').textContent = invoice.CompanyName || '—';
+      document.getElementById('companyAddress').textContent = `${invoice.CompanyAddress || ''}, ${invoice.CompanyPostCode || ''}, ${invoice.CompanyCountry || ''}`;
+      document.getElementById('companyPhones').textContent = [invoice.CompanyPhone1, invoice.CompanyPhone2, invoice.CompanyPhone3].filter(p => p).join(', ') || '—';
+      document.getElementById('companyEmail').textContent = invoice.CompanyEmail || '—';
+      document.getElementById('companyWebsite').textContent = invoice.CompanyWebsite || '—';
+      // Freetown Office details
+      document.getElementById('FreetownAddress').textContent = invoice.FreetownAddress || '—';
+      document.getElementById('FreetownPhone1').textContent = invoice.FreetownPhone1 || '—';
+      document.getElementById('FreetownPhone2').textContent = invoice.FreetownPhone2 || '—';
+
+      
+      // Sender (customer) details
+      document.getElementById('senderName').textContent = `${invoice.CustomerFirstName || ''} ${invoice.CustomerLastName || ''}`;
+      document.getElementById('senderCompany').textContent = invoice.CustomerCompany || '—';
+      document.getElementById('senderAddress').textContent = `${invoice.CustomerAddress1 || ''}, ${invoice.CustomerAddress2 || ''}`;
+      document.getElementById('senderPostCode').textContent = invoice.CustomerPostCode || '—';
+      document.getElementById('senderCountry').textContent = invoice.CustomerCountry || '—';
+  
+      // Receiver Info
+      document.getElementById('receiverName').textContent = invoice.ReceiverName || '—';
+      document.getElementById('email').textContent = invoice.Email || '—';
+      document.getElementById('phone').textContent = [invoice.Phone1, invoice.Phone2, invoice.Phone3].filter(p => p).join(', ') || '—';
+      document.getElementById('address').textContent = [invoice.Address1, invoice.Address2, invoice.PostCode].filter(p => p).join(', ') || '—';
+      document.getElementById('country').textContent = invoice.Country || '—';
+  
+      // Invoice items list
+      const itemList = document.getElementById('itemList');
+      itemList.innerHTML = '';
+      let subtotal = 0;
+      items.forEach(i => {
+        subtotal += i.TotalCost || 0;
+        itemList.innerHTML += `
+          <tr>
+            <td class="px-2 py-1">${i.ItemName}</td>
+            <td class="px-2 py-1">${i.Description}</td>
+            <td class="px-2 py-1">${i.Quantity}</td>
+            <td class="px-2 py-1">£${i.UnitCost.toFixed(2)}</td>
+            <td class="px-2 py-1">£${i.TotalCost.toFixed(2)}</td>
+          </tr>`;
+      });
+  
+      const payments = paymentsData.payments || paymentsData;
+      const totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.AmountPaid || 0), 0);
+      const balance = subtotal - totalPaid;
+  
+      document.getElementById('subtotal').textContent = `£${subtotal.toFixed(2)}`;
+      document.getElementById('amountPaid').textContent = `£${totalPaid.toFixed(2)}`;
+      document.getElementById('balance').textContent = `£${balance.toFixed(2)}`;
+  
+      // Notes
+      if (invoice.Notes && invoice.Notes.trim() !== '') {
+        document.getElementById('notes').textContent = invoice.Notes;
+      }
+
+      // Terms (from company_settings)
+      if (invoice.Terms && invoice.Terms.trim() !== '') {
+        document.getElementById('terms').textContent = invoice.Terms;
+      } else {
+        document.getElementById('terms').textContent = '—';
+      }
+
+    }
+  
+    
+      async function sendInvoiceEmail(invoiceId) {
+  if (!actionToken) {
+    showToast('Security token missing. Please reload this page and try again.', false);
+    return;
+  }
+
+  try {
+    const res = await fetch(`/email/invoice/${invoiceId}`, {
+      method: 'POST',
+      headers: {
+        'X-Action-Token': actionToken
+      }
+    });
+
+    if (res.ok) {
+      showToast('Invoice email sent successfully ✅');
+    } else {
+      let err = {};
+      try {
+        err = await res.json();
+      } catch (_) {
+        // ignore parse error, fall back to generic
+      }
+      if (res.status === 403) {
+        showToast('❌ Security check failed. Please reload this page and try again.', false);
+      } else {
+        showToast(`❌ Failed: ${err.error || 'Could not send invoice email'}`, false);
+      }
+    }
+  } catch (e) {
+    console.error('Email send error:', e);
+    showToast('❌ Network or server error', false);
+  }
+}
+
+
+    
+
+    async function loadReferralInfo() {
+      const res = await fetch(`/api/invoice/${invoiceId}/referral-reward`);
+      const reward = await res.json();
+      if (!reward) return;
+
+      const container = document.createElement('div');
+      container.className = "mb-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4";
+
+      if (reward.BonusIssued) {
+        container.innerHTML = `<p>🎉 This invoice triggered a £50 bonus to <strong>${reward.ReferrerName || 'Customer ' + reward.ReferrerID}</strong>.</p>`;
+      } else if (reward.RewardIssued) {
+        container.innerHTML = `<p>✅ This invoice triggered a £20 reward for <strong>${reward.ReferrerName || 'Customer ' + reward.ReferrerID}</strong>.</p>`;
+      }
+
+      document.body.querySelector('.max-w-4xl').prepend(container);
+    }
+
+    (async () => {
+      await getActionToken();   // 🔐 fetch token first
+      loadReferralInfo();
+      loadInvoiceDetail();
+    })();
+
+
+    function showToast(message, success = true) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+
+  toast.className = `px-4 py-2 rounded shadow text-white transition-opacity duration-500 ${
+    success ? 'bg-green-600' : 'bg-red-600'
+  }`;
+
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  // Auto remove after 3s
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 500);
+  }, 3000);
+}
+
+  </script>
+  <!-- Toast notifications -->
+<div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
+  
+</body>
+</html>

@@ -1,0 +1,123 @@
+In customer_portal_routes.js, replace the body of /api/pay/:invoiceId with this when you’re ready for live payments:
+
+// --- 4. Pay Invoice Endpoint (Stripe integration) ---
+router.post('/api/pay/:invoiceId', async (req, res) => {
+  const { invoiceId } = req.params;
+
+  const sql = `
+    SELECT InvoiceID, InvoiceNumber,
+      COALESCE((SELECT SUM(ii.TotalCost) FROM invoice_items ii WHERE ii.InvoiceID = i.InvoiceID), 0) AS Total,
+      COALESCE((SELECT SUM(p.AmountPaid) FROM payments p WHERE p.InvoiceID = i.InvoiceID), 0) AS Paid
+    FROM invoices i
+    WHERE i.InvoiceID = ?
+  `;
+
+  customerDB.get(sql, [invoiceId], async (err, invoice) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+
+    const total = Number(invoice.Total);
+    const paid  = Number(invoice.Paid);
+    const balance = total - paid;
+
+    if (balance <= 0) {
+      return res.json({ success: true, message: 'Invoice already paid' });
+    }
+
+    try {
+      // TODO: configure your secret key in environment variable
+      const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'gbp',
+            product_data: {
+              name: `Invoice ${invoice.InvoiceNumber}`
+            },
+            unit_amount: Math.round(balance * 100), // pence
+          },
+          quantity: 1,
+        }],
+        mode: 'payment',
+        success_url: 'http://localhost:3000/portal-invoices.html?paid=success',
+        cancel_url: 'http://localhost:3000/portal-pay.html?cancelled=true',
+      });
+
+      res.json({ url: session.url });
+    } catch (stripeErr) {
+      console.error('Stripe error:', stripeErr);
+      res.status(500).json({ error: 'Stripe session creation failed' });
+    }
+  });
+});
+
+⚠️ Notes:
+
+Replace http://localhost:3000 with your deployed domain.
+
+Don’t hardcode the Stripe key — use process.env.STRIPE_SECRET_KEY.
+
+You can add Stripe’s webhook later to mark invoices as paid in DB after successful checkout.
+
+----
+✅ Frontend (portal-pay.html)
+
+Replace mockPay() with this:
+
+async function mockPay() {
+  try {
+    const res = await fetch(`/api/pay/${invoiceId}`, { method: 'POST' });
+    const data = await res.json();
+
+    if (res.ok && data.url) {
+      // Redirect customer to Stripe Checkout
+      window.location.href = data.url;
+    } else if (res.ok && data.success) {
+      // Already paid
+      document.getElementById('statusMsg').style.display = 'block';
+      document.getElementById('statusMsg').innerText = data.message;
+      setTimeout(() => {
+        window.location.href = '/portal-invoices.html';
+      }, 2000);
+    } else {
+      alert(data.error || 'Payment failed');
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Payment request failed.');
+  }
+}
+
+
+✅ Setup Checklist (when ready)
+
+Create a Stripe account.
+
+Get your Secret Key from Stripe Dashboard → Developers → API keys.
+
+Add to your environment:
+
+export STRIPE_SECRET_KEY=sk_test_123...
+
+
+(or in .env file if you’re using dotenv).
+
+Run npm install stripe.
+
+Start your server.
+
+Go to /portal-pay.html, click Pay with Card → Stripe Checkout should appear.
+
+🔑 Result
+
+Customers with unpaid/partial invoices → “Pay Now” → /portal-pay.html.
+
+Click Pay with Card → redirected to Stripe Checkout (real or test).
+
+On success → returned to /portal-invoices.html?paid=success.
+
+You can later wire Stripe webhooks to automatically update your DB.
+
+👉 Do you want me to also show you how to add a Stripe webhook handler so Rockel’s database marks the invoice as Paid automatically after Stripe confirms payment?

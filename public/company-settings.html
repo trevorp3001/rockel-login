@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Company Settings | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+    <h1 class="text-2xl font-bold mb-4">Company Settings</h1>
+    <form id="settingsForm" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input name="CompanyName" placeholder="Company Name" class="p-2 border rounded" required />
+        <input name="Website" placeholder="Website" class="p-2 border rounded" />
+        <input name="Email" placeholder="Email" class="p-2 border rounded" />
+        <input name="Phone1" placeholder="Phone 1" class="p-2 border rounded" />
+        <input name="Phone2" placeholder="Phone 2" class="p-2 border rounded" />
+        <input name="Phone3" placeholder="Phone 3" class="p-2 border rounded" />
+      </div>
+
+      <textarea name="Address" placeholder="Company Address" class="w-full p-2 border rounded"></textarea>
+      <div class="grid grid-cols-2 gap-4">
+        <input name="PostCode" placeholder="Post Code" class="p-2 border rounded" />
+        <input name="Country" placeholder="Country" class="p-2 border rounded" />
+      </div>
+
+      <h2 class="text-lg font-semibold mt-6">Freetown Collection</h2>
+      <textarea name="FreetownAddress" placeholder="Freetown Collection Address" class="w-full p-2 border rounded"></textarea>
+      <div class="grid grid-cols-2 gap-4">
+        <input name="FreetownPhone1" placeholder="Freetown Phone 1" class="p-2 border rounded" />
+        <input name="FreetownPhone2" placeholder="Freetown Phone 2" class="p-2 border rounded" />
+      </div>
+
+      <h2 class="text-lg font-semibold mt-6">Invoice Terms</h2>
+      <textarea name="Terms" placeholder="Enter invoice terms and conditions here"
+        class="w-full p-2 border rounded h-40"></textarea>
+
+
+      <button type="submit" class="bg-blue-700 text-white px-6 py-2 rounded">Save Settings</button>
+    </form>
+  </div>
+
+  <script>
+  let actionToken = null;
+
+  // 🔐 Get a fresh Action Token from the server
+  async function fetchActionToken() {
+    try {
+      const res = await fetch('/api/get-action-token');
+      if (!res.ok) {
+        throw new Error('Failed to fetch action token');
+      }
+      const data = await res.json();
+      actionToken = data.actionToken;
+    } catch (err) {
+      console.error('Error fetching action token:', err);
+      alert('Security error: unable to get action token. Please refresh the page and try again.');
+    }
+  }
+
+  // 📥 Load current company settings into the form
+  async function loadSettings() {
+    try {
+      const res = await fetch('/api/company-settings');
+      if (!res.ok) throw new Error('Failed to load settings');
+
+      const data = await res.json();
+      if (data) {
+        for (const key in data) {
+          const el = document.querySelector(`[name=${key}]`);
+          if (el && data[key] != null) {
+            el.value = data[key];
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error loading company settings:', err);
+      alert('Failed to load company settings.');
+    }
+  }
+
+  // 💾 Handle Save
+  document.getElementById('settingsForm').addEventListener('submit', async e => {
+    e.preventDefault();
+
+    // Make sure we have a token before submitting
+    if (!actionToken) {
+      await fetchActionToken();
+      if (!actionToken) {
+        alert('Could not obtain security token. Please refresh the page and try again.');
+        return;
+      }
+    }
+
+    const formData = new FormData(e.target);
+    const obj = {};
+    formData.forEach((val, key) => {
+      obj[key] = val;
+    });
+
+    try {
+      const res = await fetch('/api/company-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Action-Token': actionToken
+        },
+        body: JSON.stringify(obj)
+      });
+
+      if (res.ok) {
+        alert('Company settings saved.');
+        // Optional: rotate token after a successful write
+        await fetchActionToken();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        console.error('Save failed:', errData);
+        alert('Failed to save settings.');
+      }
+    } catch (err) {
+      console.error('Network error saving settings:', err);
+      alert('Network error while saving settings.');
+    }
+  });
+
+  // ▶ On page load: get token + load settings
+  window.addEventListener('load', async () => {
+    await fetchActionToken();
+    await loadSettings();
+  });
+</script>
+</body>
+</html>

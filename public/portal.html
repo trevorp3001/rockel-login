@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rockel Shipping - Customer Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+  <div class="max-w-5xl mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-4">Track Your Invoices</h1>
+
+    <form id="loginForm" class="mb-6 bg-white p-4 rounded shadow">
+      <div class="flex gap-4 mb-2">
+        <input type="text" id="postcode" placeholder="Postcode" required class="flex-1 p-2 border rounded">
+        <input type="text" id="invoiceNumber" placeholder="Any Invoice Number" required class="flex-1 p-2 border rounded">
+        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Login</button>
+      </div>
+    </form>
+
+    <div id="invoiceListSection" class="hidden">
+      <h2 class="text-2xl font-semibold mb-3">Your Invoices</h2>
+      <table class="w-full bg-white rounded shadow">
+        <thead class="bg-gray-200">
+          <tr>
+            <th class="p-2 text-left">Invoice No</th>
+            <th class="p-2 text-left">Date</th>
+            <th class="p-2 text-left">Status</th>
+            <th class="p-2 text-left">Balance</th>
+            <th class="p-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="invoiceTable"></tbody>
+      </table>
+    </div>
+
+    <div id="trackingSection" class="hidden mt-8">
+      <button onclick="goBack()" class="text-blue-600 mb-3">&larr; Back to Invoices</button>
+      <h2 class="text-xl font-bold mb-1">Invoice <span id="detailInvoiceNo"></span></h2>
+      <p>Status: <span id="detailPaidStatus"></span></p>
+      <p class="mb-4">Balance: £<span id="detailBalance"></span></p>
+
+      <div id="progressBar" class="flex gap-2 mb-4"></div>
+
+      <table class="w-full bg-white rounded shadow">
+        <thead class="bg-gray-200">
+          <tr>
+            <th class="p-2 text-left">Item</th>
+            <th class="p-2 text-left">Description</th>
+            <th class="p-2 text-left">Qty</th>
+            <th class="p-2 text-left">Latest Stage</th>
+            <th class="p-2 text-left">Last Updated</th>
+          </tr>
+        </thead>
+        <tbody id="trackingTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let currentCustomerId = null;
+    let currentInvoices = [];
+
+    document.getElementById('loginForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const postcode = document.getElementById('postcode').value.trim();
+      const invoiceNumber = document.getElementById('invoiceNumber').value.trim();
+      const res = await fetch(`/api/portal/login?postcode=${encodeURIComponent(postcode)}&invoice=${encodeURIComponent(invoiceNumber)}`);
+      const data = await res.json();
+      if (data && data.CustomerID) {
+        currentCustomerId = data.CustomerID;
+        loadInvoices(currentCustomerId);
+        document.getElementById('loginForm').classList.add('hidden');
+        document.getElementById('invoiceListSection').classList.remove('hidden');
+      } else {
+        alert('Customer not found. Check details and try again.');
+      }
+    };
+
+    async function loadInvoices(customerId) {
+      const res = await fetch(`/api/portal/${customerId}/invoices`);
+      const invoices = await res.json();
+      displayInvoices(invoices);
+      currentInvoices = invoices;
+    }
+
+    function displayInvoices(invoices) {
+      const table = document.getElementById('invoiceTable');
+      table.innerHTML = '';
+      invoices.forEach(invoice => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="p-2">${invoice.InvoiceNumber}</td>
+          <td class="p-2">${invoice.InvoiceDate}</td>
+          <td class="p-2 font-bold ${invoice.status === 'Paid' ? 'text-green-600' : invoice.status === 'Partial' ? 'text-yellow-600' : 'text-red-600'}">${invoice.status}</td>
+          <td class="p-2">£${invoice.balance}</td>
+          <td class="p-2">
+            <button class="text-blue-600 underline track-btn" data-id="${invoice.InvoiceID}" data-paid="${invoice.status === 'Paid'}">Track</button>
+          </td>
+        `;
+        table.appendChild(tr);
+      });
+      document.querySelectorAll('.track-btn').forEach(btn => {
+        btn.onclick = () => {
+          const invoiceId = btn.getAttribute('data-id');
+          const isPaid = btn.getAttribute('data-paid') === 'true';
+          if (!isPaid) {
+            alert('Tracking is only available once the invoice is fully paid.');
+            return;
+          }
+          document.getElementById('invoiceListSection').classList.add('hidden');
+          document.getElementById('trackingSection').classList.remove('hidden');
+          loadTracking(invoiceId);
+        };
+      });
+    }
+
+    function goBack() {
+      document.getElementById('trackingSection').classList.add('hidden');
+      document.getElementById('invoiceListSection').classList.remove('hidden');
+    }
+
+    async function loadTracking(invoiceId) {
+      try {
+        const res = await fetch(`/api/portal/invoice/${invoiceId}/tracking`);
+        const data = await res.json();
+
+        const invoice = currentInvoices.find(inv => String(inv.InvoiceID) === String(invoiceId));
+          console.log('Current Invoices:', currentInvoices, 'Looking for:', invoiceId); // ← DEBUG LINE
+          if (invoice) {
+            document.getElementById('detailInvoiceNo').textContent = invoice.InvoiceNumber;
+            document.getElementById('detailBalance').textContent = invoice.balance;
+            document.getElementById('detailPaidStatus').textContent = invoice.status;
+          } else {
+            console.warn('Invoice not found in currentInvoices for ID:', invoiceId);
+          }
+
+
+        const bar = document.getElementById('progressBar');
+        bar.innerHTML = '';
+        data.summary.steps.forEach((step, idx) => {
+          const div = document.createElement('div');
+          div.textContent = step;
+          div.className = 'flex-1 text-center py-2 px-1 rounded-full ' + (idx <= data.summary.current ? 'bg-green-500 text-white' : 'bg-gray-300');
+          bar.appendChild(div);
+        });
+
+        const body = document.getElementById('trackingTable');
+        body.innerHTML = data.items.map(item => `
+          <tr>
+            <td class="p-2">${item.ItemName}</td>
+            <td class="p-2">${item.Description || ''}</td>
+            <td class="p-2">${item.Quantity}</td>
+            <td class="p-2">${item.LatestStage || 'Not Available'}</td>
+            <td class="p-2">${item.LastUpdate ? new Date(item.LastUpdate).toLocaleString() : ''}</td>
+          </tr>
+        `).join('');
+
+      } catch (err) {
+        console.error('Failed to load tracking:', err);
+        document.getElementById('trackingTable').innerHTML = '<tr><td colspan="5" class="p-2 text-red-600">Error loading tracking details.</td></tr>';
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>View Customer | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #toast {
+      transition: opacity 0.3s ease;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 p-6">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <div id="toast" class="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded shadow hidden z-50"></div>
+  <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+    <h2 class="text-2xl font-bold mb-2">View / Edit Customer</h2>
+
+    <!-- Customer Identifier Label -->
+    <div id="customerLabel" class="text-gray-600 font-bold mb-6"></div>
+    <p class="text-sm text-gray-700 mb-4">
+      <strong>Referral Number:</strong>
+      <span id="referralNumberDisplay" class="font-mono text-blue-700"></span>
+    </p>
+
+
+    <form id="customerForm" method="POST" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input name="Company" placeholder="Company" class="p-2 border rounded" />
+        <input name="FirstName" placeholder="First Name" class="p-2 border rounded" />
+        <input name="LastName" placeholder="Last Name" class="p-2 border rounded" />
+        <input name="Email" placeholder="E-mail Address" class="p-2 border rounded" />
+        <input name="Phone1" placeholder="Phone 1" class="p-2 border rounded" />
+        <input name="Phone2" placeholder="Phone 2" class="p-2 border rounded" />
+        <input name="Phone3" placeholder="Phone 3" class="p-2 border rounded" />
+        <input name="FaxNumber" placeholder="Fax Number" class="p-2 border rounded" />
+        <input name="Address1" placeholder="Address 1" class="p-2 border rounded" />
+        <input name="Address2" placeholder="Address 2" class="p-2 border rounded" />
+        <input name="Address3" placeholder="Address 3" class="p-2 border rounded" />
+        <input name="PostCode" placeholder="Post Code" class="p-2 border rounded" />
+        <input name="Country" placeholder="Country" class="p-2 border rounded" />
+        <input name="WebPage" placeholder="Web Page" class="p-2 border rounded" />
+
+        <select name="Type" class="p-2 border rounded" required>
+          <option value="">Select Type</option>
+          <option value="Customer">Customer</option>
+          <option value="Business">Business</option>
+        </select>
+
+        <select name="Category" class="p-2 border rounded" required>
+          <option value="">Select Region</option>
+          <option value="London">London</option>
+          <option value="North">North</option>
+          <option value="South">South</option>
+          <option value="South-West">South-West</option>
+          <option value="Freetown">Freetown</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div>
+        <label class="block mb-1">How did you hear about us?</label>
+        <select name="ReferralSource" id="referralDropdown" class="p-2 border rounded w-full" onchange="toggleOtherReferral(this)">
+          <option value="">Select an option</option>
+          <option value="Google">Google</option>
+          <option value="Facebook">Facebook</option>
+          <option value="WhatsApp">WhatsApp</option>
+          <option value="Friend/Family">Friend/Family</option>
+          <option value="Returning Customer">Returning Customer</option>
+          <option value="Other">Other</option>
+        </select>
+        <input type="text" name="ReferralSourceOther" id="referralOther" placeholder="Please specify" class="p-2 border rounded w-full mt-2 hidden" />
+      </div>
+      <div>
+        <textarea name="Notes" placeholder="Notes" class="w-full p-2 border rounded"></textarea>
+      </div>
+
+      <div>
+        <label class="block font-semibold">Referral Summary:</label>
+        <div id="referralInfo" class="mt-1 text-sm text-gray-700">Loading...</div>
+      </div>
+
+      <div class="mt-4">
+        <label class="block font-semibold">Referral History:</label>
+        <ul id="referralHistory" class="text-sm text-gray-700 mt-1 space-y-1"></ul>
+      </div>
+
+      <button type="submit" class="bg-blue-700 text-white px-6 py-2 rounded">Save Changes</button>
+    </form>
+
+    <div class="mt-6 space-x-4">
+      <a id="bookingsBtn" class="bg-gray-800 text-white px-4 py-2 rounded" href="#">Bookings</a>
+      <a id="invoicesBtn" class="bg-gray-800 text-white px-4 py-2 rounded" href="#">Invoices</a>
+      <a id="feedbackBtn" class="bg-gray-800 text-white px-4 py-2 rounded" href="#">Feedback</a>
+      <a href="/dashboard" class="bg-green-600 text-white px-4 py-2 rounded">Back to Customer Page</a>
+    </div>
+  </div>
+
+  <script>
+    const customerId = new URLSearchParams(window.location.search).get('id');
+
+    let actionToken = null;
+
+async function fetchActionToken() {
+  try {
+    const res = await fetch('/api/get-action-token', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('Failed to fetch action token');
+      return;
+    }
+    const data = await res.json();
+    actionToken = data.actionToken;
+  } catch (err) {
+    console.error('Error getting action token', err);
+  }
+}
+
+
+    function showToast(message, success = true) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `fixed top-4 right-4 px-4 py-2 rounded shadow z-50 ${success ? 'bg-green-600' : 'bg-red-600'} text-white`;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+
+    async function loadCustomer() {
+      const res = await fetch(`/customer/${customerId}`);
+      const data = await res.json();
+
+      document.querySelector('[name=Company]').value = data.Company || '';
+      document.querySelector('[name=FirstName]').value = data['First Name'] || '';
+      document.querySelector('[name=LastName]').value = data['Last Name'] || '';
+      document.querySelector('[name=Email]').value = data['E-mail Address'] || '';
+      document.querySelector('[name=Phone1]').value = data['Phone 1'] || '';
+      document.querySelector('[name=Phone2]').value = data['Phone 2'] || '';
+      document.querySelector('[name=Phone3]').value = data['Phone 3'] || '';
+      document.querySelector('[name=FaxNumber]').value = data['Fax Number'] || '';
+      document.querySelector('[name=Address1]').value = data['Address 1'] || '';
+      document.querySelector('[name=Address2]').value = data['Address 2'] || '';
+      document.querySelector('[name=Address3]').value = data['Address 3'] || '';
+      document.querySelector('[name=PostCode]').value = data['Post Code'] || '';
+      document.querySelector('[name=Country]').value = data.Country || '';
+      document.querySelector('[name=WebPage]').value = data['Web Page'] || '';
+      document.querySelector('[name=Type]').value = data.Type || '';
+      document.querySelector('[name=Category]').value = data.Category || '';
+      document.querySelector('[name=Notes]').value = data.Notes || '';
+
+      document.getElementById('bookingsBtn').href = `/bookings?customerId=${customerId}`;
+      document.getElementById('invoicesBtn').href = `/invoices?customerId=${customerId}`;
+      document.getElementById('feedbackBtn').href = `/feedback?customerId=${customerId}`;
+
+      // Set the grey bold label
+      const label = `${data['First Name'] || ''} ${data['Last Name'] || ''} (${data['Post Code'] || ''})`;
+      document.getElementById('customerLabel').textContent = label;
+
+      // Set referral number
+      document.getElementById('referralNumberDisplay').textContent = `C${String(data.CustomerID).padStart(6, '0')}`;
+
+      document.querySelector('[name=ReferralSource]').value = data.ReferralSource || '';
+      if (data.ReferralSource === 'Other') {
+        document.getElementById('referralOther').classList.remove('hidden');
+        document.querySelector('[name=ReferralSourceOther]').value = data.ReferralSourceOther || '';
+      }
+
+    }
+
+    document.getElementById('customerForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+
+  const referral = form.ReferralSource.value;
+  if (referral === 'Other') {
+    form.ReferralSource.value = form.ReferralSourceOther.value;
+  }
+
+  // Ensure token
+  if (!actionToken) {
+    await fetchActionToken();
+  }
+
+  const fd = new FormData(form);
+  fd.append('_actionToken', actionToken);
+
+  const formData = new URLSearchParams(fd).toString();
+
+  const res = await fetch(`/customer/${customerId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: formData
+  });
+
+  if (res.ok) {
+    showToast('Customer updated successfully');
+    loadCustomer();
+    // Refresh token for next time
+    await fetchActionToken();
+  } else {
+    showToast('Failed to update customer', false);
+  }
+});
+
+
+    function toggleOtherReferral(select) {
+      const otherBox = document.getElementById('referralOther');
+      if (select.value === 'Other') {
+        otherBox.classList.remove('hidden');
+      } else {
+        otherBox.classList.add('hidden');
+        otherBox.value = '';
+      }
+    }
+
+    async function loadReferralSummary() {
+      const res = await fetch(`/api/customers/${customerId}/referral-summary`);
+      const data = await res.json();
+
+      if (!data.totalReferrals) {
+        document.getElementById('referralInfo').textContent = 'No referrals recorded.';
+        return;
+      }
+
+      document.getElementById('referralInfo').innerHTML = `
+        Referred ${data.totalReferrals} customer(s)<br>
+        Earned £${data.totalReferrals * 20}${data.bonusIssued ? ' + £50 bonus 🎉' : ''}.
+      `;
+    }
+
+    async function loadReferralHistory() {
+    const res = await fetch(`/api/customers/${customerId}/referral-history`);
+    const data = await res.json();
+    const list = document.getElementById('referralHistory');
+    if (!data.length) {
+      list.innerHTML = '<li>No referral history.</li>';
+      return;
+    }
+
+    list.innerHTML = '';
+      data.forEach(r => {
+        if (r.ReferredCustomerID && +r.ReferrerID === +customerId) {
+          list.innerHTML += `<li>Referred <strong>${r.ReferredName || 'Customer ' + r.ReferredCustomerID}</strong> via Invoice #${r.InvoiceID} — £20 reward</li>`;
+        } else if (r.BonusIssued) {
+          list.innerHTML += `<li>🎉 Bonus issued — £50 for 5 referrals</li>`;
+        } else if (+r.ReferredCustomerID === +customerId) {
+          list.innerHTML += `<li>Was referred by <strong>${r.ReferrerName || 'Customer ' + r.ReferrerID}</strong> — £20 welcome reward</li>`;
+        }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+  await fetchActionToken();
+  loadCustomer();
+  loadReferralSummary();
+  loadReferralHistory();
+});
+
+
+  </script>
+</body>
+</html>

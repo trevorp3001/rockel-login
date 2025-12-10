@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Add Container | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <!-- Header -->
+<header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+  <h1 class="text-xl font-bold">Rockel Shipping</h1>
+  <nav class="flex flex-wrap items-center space-x-4">
+    <a href="/dashboard" class="underline">Customer</a>
+    <a href="/job-list">Bookings</a>
+    <a href="/invoices-list" class="hover:underline">Invoices</a>
+    <a href="/containers-list" class="hover:underline">Containers</a>
+    <a href="#">Reports</a>
+    <form action="/logout" method="GET">
+      <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+    </form>
+  </nav>
+</header>
+
+
+  <main class="p-6 max-w-4xl mx-auto">
+    <h2 class="text-2xl font-bold mb-4">Add New Container</h2>
+    <form method="POST" action="/containers" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+      <input type="hidden" name="_actionToken" id="actionTokenField" />
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-gray-700">Vessel</label>
+          <input name="Vessel" required class="w-full border px-3 py-2 rounded" />
+        </div>
+
+        <div>
+          <label class="block text-gray-700">Carrier</label>
+          <input name="Carrier" required class="w-full border px-3 py-2 rounded" />
+        </div>
+
+        <div>
+          <label class="block text-gray-700">Booking Ref</label>
+          <input name="BookingRef" class="w-full border px-3 py-2 rounded" />
+        </div>
+
+        <div>
+          <label class="block text-gray-700">Container Number/VIN</label>
+          <input name="ContainerNumber" required class="w-full border px-3 py-2 rounded" placeholder="e.g. Z4567" />
+        </div>  
+        
+        <div>
+          <label class="block text-gray-700">Date Loaded</label>
+          <input type="date" name="DateLoaded" class="w-full border px-3 py-2 rounded" />
+        </div>
+
+        <div>
+          <label class="block text-gray-700">ETD</label>
+          <input type="date" name="ETD" class="w-full border px-3 py-2 rounded" />
+        </div>
+
+        <div>
+          <label class="block text-gray-700">ETA</label>
+          <input type="date" name="ETA" class="w-full border px-3 py-2 rounded" />
+        </div>
+
+        <div>
+          <label class="block text-gray-700">Date Arrived</label>
+          <input type="date" name="DateArrived" class="w-full border px-3 py-2 rounded" />
+        </div>
+
+        <div>
+          <label class="block text-gray-700">Date Cleared</label>
+          <input type="date" name="DateCleared" class="w-full border px-3 py-2 rounded" />
+        </div>
+
+        <div>
+          <label class="block text-gray-700">Size</label>
+          <select name="Size" class="w-full border px-3 py-2 rounded">
+            <option value="20FT">20FT</option>
+            <option value="40FT HC">40FT HC</option>
+            <option value="Roro Vehicle">Roro Vehicle</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-gray-700">Status</label>
+          <input name="Status" class="w-full border px-3 py-2 rounded" placeholder="e.g. In Transit, Arrived, Cleared" />
+        </div>
+
+        <div>
+          <label class="block text-gray-700">Seal Number/Reg</label>
+          <input name="ContainerSeal" class="w-full border px-3 py-2 rounded" />
+        </div>
+
+        <div>
+          <label class="block text-gray-700">Paid</label>
+          <select name="Paid" class="w-full border px-3 py-2 rounded">
+            <option value="">Select</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </div>        
+
+        <div>
+          <label class="block text-gray-700">Cost</label>
+          <input name="Cost" type="number" step="0.01" class="w-full border px-3 py-2 rounded" />
+        </div>
+
+        <div>
+          <label class="block text-gray-700">Voyage Number</label>
+          <input name="VoyageNumber" class="w-full border px-3 py-2 rounded" />
+        </div>
+        
+        <div class="col-span-2">
+          <label><input type="checkbox" name="CustomerContainer" value="1" class="mr-1" /> Customer Container</label>
+        </div>
+        
+        <div class="col-span-2">
+          <label><input type="checkbox" name="VehicleRoro" value="1" class="mr-1" /> Vehicle Roro</label>
+        </div>        
+
+        <div class="col-span-2">
+          <label class="block text-gray-700">Notes</label>
+          <textarea name="Notes" class="w-full border px-3 py-2 rounded"></textarea>
+        </div>
+      </div>
+
+      <div class="mt-4">
+        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded">Save Container</button>
+        <a href="/containers-list" class="ml-4 text-blue-600 hover:underline">Back to Containers</a>
+      </div>
+    </form>
+  </main>
+    <script>
+    let actionToken = null;
+
+    async function loadActionToken() {
+      try {
+        const res = await fetch('/api/get-action-token');
+        if (!res.ok) throw new Error('Failed to fetch token');
+        const data = await res.json();
+        actionToken = data.actionToken;
+
+        const field = document.getElementById('actionTokenField');
+        if (field) field.value = actionToken;
+      } catch (err) {
+        console.error('Failed to load Action Token', err);
+        alert('Security token error. Please refresh this page before saving the container.');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadActionToken);
+  </script>
+</body>
+</html>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Area Text List</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  
+  <h1 class="text-2xl font-bold mb-4">Area Text List</h1>
+
+  <div class="bg-white p-4 rounded shadow mb-4 flex flex-wrap gap-4 items-center">
+    <select id="regionFilter" class="border p-2 rounded">
+      <option value="">All Regions</option>
+      <option>London</option>
+      <option>North</option>
+      <option>South</option>
+      <option>South-West</option>
+      <option>Freetown</option>
+      <option>Other</option>
+    </select>
+    <select id="categoryFilter" class="border p-2 rounded">
+      <option value="">All Categories</option>
+      <option>Customer</option>
+      <option>Business</option>
+    </select>
+    <button onclick="loadTextList()" class="bg-blue-600 text-white px-4 py-2 rounded">Apply Filters</button>
+    <button onclick="exportCSV()" class="bg-green-600 text-white px-4 py-2 rounded">Export CSV</button>
+    <button onclick="copyPhoneNumbers()" class="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700">
+      📋 Copy Numbers
+    </button>
+    <button onclick="clearFilters()" class="bg-gray-500 text-white px-4 py-2 rounded">Clear Filters</button>
+  </div>
+
+  <div class="bg-white shadow rounded overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-200">
+        <tr>
+          <th class="text-left p-3">Customer</th>
+          <th class="text-left p-3">Phone 1</th>
+          <th class="text-left p-3">Phone 2</th>
+          <th class="text-left p-3">Region</th>
+          <th class="text-left p-3">Category</th>
+        </tr>
+      </thead>
+      <tbody id="textTable"></tbody>
+    </table>
+  </div>
+
+  <script>
+    let currentData = [];
+
+    async function loadTextList() {
+      const region = document.getElementById('regionFilter').value;
+      const category = document.getElementById('categoryFilter').value;
+      const res = await fetch(`/api/textlist/area?region=${region}&category=${category}`);
+      const data = await res.json();
+      currentData = data;
+      const tbody = document.getElementById('textTable');
+      tbody.innerHTML = '';
+
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="p-3">${row.Name}</td>
+          <td class="p-3">${row.Phone1}</td>
+          <td class="p-3">${row.Phone2}</td>
+          <td class="p-3">${row.Region}</td>
+          <td class="p-3">${row.Category}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function exportCSV() {
+      const csvRows = ["Name,Phone1,Phone2"];
+      currentData.forEach(r => {
+        csvRows.push(`${r.Name},"'${r.Phone1}","'${r.Phone2}"`);
+      });
+      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'area-text-list.csv';
+      link.click();
+    }
+
+    loadTextList();
+        function clearFilters() {
+      document.querySelectorAll('select, input[type=date], input[type=number]').forEach(el => el.value = '');
+      loadTextList();
+    }
+
+    function copyPhoneNumbers() {
+      if (!currentData || currentData.length === 0) {
+        alert("No numbers to copy.");
+        return;
+      }
+
+      // Extract and combine all numbers
+      const numbers = currentData.flatMap(r => [r.Phone1, r.Phone2])
+        .filter(num => num && num.trim()) // remove empty/null
+        .map(num => num.trim());
+
+      const text = numbers.join(', ');
+
+      // Copy to clipboard
+      navigator.clipboard.writeText(text)
+        .then(() => alert("Numbers copied to clipboard!"))
+        .catch(err => alert("Failed to copy: " + err));
+    }
+
+  </script>
+</body>
+</html>

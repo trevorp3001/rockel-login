@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Booking Allocation Form</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <div id="toast" class="fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded shadow hidden z-50"></div>
+
+  <main class="max-w-6xl mx-auto mt-6">
+    <h2 class="text-2xl font-bold mb-4">Adjust Booking Allocations</h2>
+    <div class="flex flex-wrap gap-4 mb-6">
+      <input type="date" id="filterDate" class="border p-2 rounded" />
+      <select id="filterRegion" class="border p-2 rounded">
+        <option value="">All Regions</option>
+        <option value="London">London</option>
+        <option value="North">North</option>
+        <option value="South">South</option>
+        <option value="South-West">South-West</option>
+        <option value="Freetown">Freetown</option>
+        <option value="Other">Other</option>
+      </select>
+      <button onclick="loadBookings()" class="bg-blue-600 text-white px-4 py-2 rounded">Apply Filters</button>
+    </div>
+    
+
+    <table class="w-full text-sm bg-white border rounded">
+      <thead class="bg-gray-200">
+        <tr>
+          <th class="p-2 text-left">Customer</th>
+          <th class="p-2 text-left">Address</th>
+          <th class="p-2 text-left">Date</th>
+          <th class="p-2 text-left">Afternoon/Evening</th>
+          <th class="p-2 text-left">Current Allocation</th>
+          <th class="p-2 text-left">Change To</th>
+        </tr>
+      </thead>
+      <tbody id="bookingTable"></tbody>
+    </table>
+  </main>
+
+  <script>
+     let actionToken = null;
+
+  async function loadActionToken() {
+    try {
+      const res = await fetch('/api/get-action-token');
+      if (!res.ok) throw new Error('Failed to fetch action token');
+      const data = await res.json();
+      actionToken = data.actionToken;
+      console.log('✅ Action token loaded for booking allocation:', actionToken);
+    } catch (err) {
+      console.error('❌ Error loading action token:', err);
+      showToast('Security token error – please reload the page', false);
+    }
+  }
+
+    function showToast(message, success = true) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `fixed top-4 right-4 px-4 py-2 rounded shadow z-50 ${success ? 'bg-green-600' : 'bg-red-600'} text-white`;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+
+    async function loadBookings() {
+      const date = document.getElementById('filterDate').value;
+      const region = document.getElementById('filterRegion').value;
+      const res = await fetch('/api/bookings/job-list');
+      const data = await res.json();
+      const filtered = data.filter(b => {
+        return (!date || b.BookingDate === date) && (!region || b.Region === region);
+      });
+      const tbody = document.getElementById('bookingTable');
+      tbody.innerHTML = '';
+      filtered.forEach(b => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="p-2">${b.FirstName} ${b.LastName}</td>
+          <td class="p-2">${b.Address1} ${b.PostCode}</td>
+          <td class="p-2">${b.BookingDate}</td>
+          <td class="p-2">${b['Afternoon/Evening']}</td>
+          <td class="p-2">${b.BookingSlot}</td>
+          <td class="p-2">
+            <select onchange="updateSlot(${b.BookingID}, this.value)" class="border p-1 rounded">
+              ${[...Array(9).keys()].map(i => `<option value="${i+1}" ${b.BookingSlot==i+1?'selected':''}>${i+1}</option>`).join('')}
+            </select>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    async function updateSlot(id, newSlot) {
+  try {
+    const res = await fetch(`/bookings/${id}/slot`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Action-Token': actionToken || ''
+      },
+      body: JSON.stringify({ BookingSlot: newSlot })
+    });
+
+    if (res.status === 403) {
+      // Token missing/expired/invalid – try to refresh once
+      showToast('Security token expired – refreshing…', false);
+      await loadActionToken();
+      return;
+    }
+
+    if (!res.ok) {
+      showToast('Failed to update allocation ❌', false);
+      console.error('❌ Booking slot update failed:', await res.text());
+      return;
+    }
+
+    showToast('Allocation updated ✅');
+  } catch (err) {
+    console.error('❌ Error in updateSlot:', err);
+    showToast('Error updating allocation', false);
+  }
+}
+
+
+
+    // On page load
+  (async () => {
+    await loadActionToken();  // get token first
+    await loadBookings();     // then load data
+  })();
+  </script>
+</body>
+</html>

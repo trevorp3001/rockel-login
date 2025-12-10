@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Track Item | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+ <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <div class="max-w-3xl mx-auto bg-white p-6 rounded shadow">
+    <h2 class="text-2xl font-bold mb-4">Track Item</h2>
+
+    <form id="trackForm" class="space-y-4">
+      <input type="hidden" name="ItemID" id="ItemID" />
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <select name="Stage" id="Stage" class="p-2 border rounded" required>
+          <option value="">Select Stage</option>
+          <option value="Collected">Collected</option>
+          <option value="Received">Received (London)</option>
+          <option value="Shipped">Shipped (Add container)</option>
+          <option value="Arrived">Arrived (Freetown)</option>
+          <option value="Collected (SL)">Collected (SL)</option>
+          <option value="Delivered">Delivered</option>
+        </select>
+        <input name="Timestamp" type="datetime-local" class="p-2 border rounded" required />
+        <input name="Location" placeholder="Location" class="p-2 border rounded" />
+      </div>
+
+      <!-- Container dropdown will only show if stage === Shipped -->
+      <div id="containerSection" class="hidden">
+        <label for="ContainerID" class="block font-semibold">Select Container</label>
+        <select name="ContainerID" id="ContainerID" class="p-2 border rounded w-full">
+          <!-- dynamically loaded -->
+        </select>
+      </div>
+
+      <textarea name="Notes" placeholder="Notes" class="w-full p-2 border rounded"></textarea>
+      <button type="submit" class="bg-blue-700 text-white px-6 py-2 rounded">Save Tracking</button>
+    </form>
+
+    <div class="mt-4">
+      <a href="/invoice-items" class="text-blue-700 underline">← Back to Items</a>
+    </div>
+  </div>
+
+  <script>
+    const itemId = new URLSearchParams(window.location.search).get('itemId');
+    document.getElementById('ItemID').value = itemId;
+
+    async function loadContainers() {
+      const res = await fetch('/containers/eligible-for-tracking');
+      const data = await res.json();
+      const select = document.getElementById('ContainerID');
+      select.innerHTML = '<option value="">Select Container</option>';
+      data.forEach(c => {
+        select.innerHTML += `<option value="${c.ContainerID}">${c.ContainerNumber} (${c.Vessel})</option>`;
+      });
+    }
+
+    document.getElementById('Stage').addEventListener('change', e => {
+      const containerSection = document.getElementById('containerSection');
+      if (e.target.value === 'Shipped') {
+        containerSection.classList.remove('hidden');
+        loadContainers();
+      } else {
+        containerSection.classList.add('hidden');
+        document.getElementById('ContainerID').value = '';
+      }
+    });
+
+    document.getElementById('trackForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const form = e.target;
+      const formData = new URLSearchParams(new FormData(form)).toString();
+      const res = await fetch(`/track-item/${itemId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData
+      });
+
+      if (res.ok) {
+        alert('Tracking saved!');
+        form.reset();
+        window.location.href = `/invoice-items?invoiceId=...`; // optional redirect
+      } else {
+        alert('Failed to save tracking.');
+      }
+    });
+  </script>
+</body>
+</html>

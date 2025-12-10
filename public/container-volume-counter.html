@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Container Volume Counter</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script>
+    async function loadItemVolume() {
+      const res = await fetch('/api/volume/items');
+      const data = await res.json();
+      document.getElementById('itemTotal').textContent = `£${data.total}`;
+      document.getElementById('itemVolume').textContent = `${data.volume} m³`;
+      document.getElementById('itemPercent').textContent = `${data.percent}% full`;
+    }
+
+    async function loadBookingVolume() {
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+      if (!start || !end) return alert('Please select a date range');
+
+      const res = await fetch(`/api/volume/bookings?start=${start}&end=${end}`);
+      const data = await res.json();
+      document.getElementById('bookingCount').textContent = `${data.count} bookings`;
+      document.getElementById('bookingTotal').textContent = `£${data.estTotal}`;
+      document.getElementById('bookingVolume').textContent = `${data.volume} m³`;
+      document.getElementById('bookingPercent').textContent = `${data.percent}% full`;
+    }
+
+    window.onload = loadItemVolume;
+  </script>
+</head>
+<body class="p-6">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  
+  <h1 class="text-2xl font-bold mb-6">📦 Container Volume Estimator</h1>
+
+  <!-- Tracked Items Section -->
+  <div class="mb-8 p-4 bg-white shadow rounded">
+    <h2 class="text-xl font-semibold mb-2">Tracked Items (Picked Up / Received London)</h2>
+    <p>Total Value: <strong id="itemTotal">£0</strong></p>
+    <p>Volume: <strong id="itemVolume">0 m³</strong></p>
+    <p>Container Fill: <strong id="itemPercent">0%</strong></p>
+  </div>
+
+  <!-- Bookings Forecast Section -->
+  <div class="p-4 bg-white shadow rounded">
+    <h2 class="text-xl font-semibold mb-2">Forecast from Bookings</h2>
+    <div class="flex flex-wrap gap-4 items-center mb-4">
+      <label>Start Date: <input type="date" id="startDate" class="border px-2 py-1" /></label>
+      <label>End Date: <input type="date" id="endDate" class="border px-2 py-1" /></label>
+      <button onclick="loadBookingVolume()" class="bg-blue-600 text-white px-4 py-1 rounded">Calculate</button>
+    </div>
+    <p>Booking Count: <strong id="bookingCount">0</strong></p>
+    <p>Estimated Total: <strong id="bookingTotal">£0</strong></p>
+    <p>Volume: <strong id="bookingVolume">0 m³</strong></p>
+    <p>Container Fill: <strong id="bookingPercent">0%</strong></p>
+  </div>
+</body>
+</html>

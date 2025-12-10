@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>All Job List | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <main class="p-6 max-w-7xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-2xl font-bold">All Job List</h2>
+      <a href="/job-list-print" class="bg-green-600 text-white px-4 py-2 rounded">🖨️ Print/View Job List</a>
+    </div>
+
+    <div class="flex flex-wrap gap-4 mb-6">
+      <div>
+        <label class="block text-sm font-medium">Date</label>
+        <input type="date" id="filterDate" class="border p-2 rounded w-full" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Region</label>
+        <select id="filterRegion" class="border p-2 rounded w-full">
+          <option value="">All Regions</option>
+          <option value="London">London</option>
+          <option value="North">North</option>
+          <option value="South">South</option>
+          <option value="South-West">South-West</option>
+          <option value="Freetown">Freetown</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Allocation</label>
+        <select id="filterAllocation" class="border p-2 rounded w-full">
+          <option value="">All</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+        </select>
+      </div>
+      <div class="flex items-end">
+        <button id="resetFilters" class="bg-gray-500 text-white px-4 py-2 rounded">Reset</button>
+      </div>
+    </div>
+
+    <div id="jobListContainer">
+      <!-- Job list will be rendered here -->
+    </div>
+  </main>
+
+  <script>
+    async function fetchJobData() {
+      const res = await fetch('/api/bookings/job-list-all');
+      const data = await res.json();
+      return data;
+    }
+
+    function renderGroupedJobs(data) {
+      const container = document.getElementById('jobListContainer');
+      container.innerHTML = '';
+
+      const grouped = {};
+      data.forEach(b => {
+        const date = b.BookingDate;
+        const region = b.Region || 'Unknown';
+        const slot = b.BookingSlot || '1';
+
+        if (!grouped[date]) grouped[date] = {};
+        if (!grouped[date][region]) grouped[date][region] = {};
+        if (!grouped[date][region][slot]) grouped[date][region][slot] = [];
+
+        grouped[date][region][slot].push(b);
+      });
+
+      for (const date in grouped) {
+        const dateBlock = document.createElement('div');
+        dateBlock.innerHTML = `<h3 class="text-xl font-semibold my-2">📅 ${date}</h3>`;
+
+        for (const region in grouped[date]) {
+          const regionBlock = document.createElement('div');
+          regionBlock.innerHTML = `<h4 class="text-lg font-medium ml-4 mt-2">📍 ${region}</h4>`;
+
+          for (const slot in grouped[date][region]) {
+            const slotBlock = document.createElement('div');
+            slotBlock.innerHTML = `<h5 class="font-semibold ml-6 mt-1">🧭 Allocation: ${slot}</h5>`;
+
+            const rows = grouped[date][region][slot].map(b => `
+              <div class="bg-white shadow p-4 m-2 rounded">
+                <div class="font-bold">${b.FirstName} ${b.LastName}</div>
+                <div>${b.Address1 || ''} ${b.PostCode || ''}</div>
+                <div>📞 ${[b.Phone1, b.Phone2, b.Phone3].filter(Boolean).join(' / ')}</div>
+                <div>${b['Afternoon/Evening'] || ''} | Allocation: ${b.BookingSlot}</div>
+                <div class="text-sm">${b.Notes || ''}</div>
+                <div class="mt-2 space-x-2">
+                  <a href="/bookings?customerId=${b.CustomerID}" title="Edit Booking">✏️</a>
+                  <a href="/invoices?customerId=${b.CustomerID}" title="Add Invoice">🧾</a>
+                  <a href="/view-customer?id=${b.CustomerID}" title="Open Customer">👤</a>
+                  <button onclick="deleteBooking(${b.BookingID})" class="text-red-600">🗑️</button>
+                </div>
+              </div>
+            `).join('');
+
+            slotBlock.innerHTML += rows;
+            regionBlock.appendChild(slotBlock);
+          }
+
+          dateBlock.appendChild(regionBlock);
+        }
+
+        container.appendChild(dateBlock);
+      }
+    }
+
+    function applyFilters(data) {
+      const selectedDate = document.getElementById('filterDate').value;
+      const selectedRegion = document.getElementById('filterRegion').value;
+      const selectedSlot = document.getElementById('filterAllocation').value;
+
+      return data.filter(b => {
+        const matchDate = !selectedDate || b.BookingDate === selectedDate;
+        const matchRegion = !selectedRegion || b.Region === selectedRegion;
+        const matchSlot = !selectedSlot || String(b.BookingSlot) === selectedSlot;
+        return matchDate && matchRegion && matchSlot;
+      });
+    }
+
+    async function loadJobs() {
+      const rawData = await fetchJobData();
+      const filtered = applyFilters(rawData);
+      renderGroupedJobs(filtered);
+    }
+
+    document.getElementById('filterDate').addEventListener('change', loadJobs);
+    document.getElementById('filterRegion').addEventListener('change', loadJobs);
+    document.getElementById('filterAllocation').addEventListener('change', loadJobs);
+    document.getElementById('resetFilters').addEventListener('click', () => {
+      document.getElementById('filterDate').value = '';
+      document.getElementById('filterRegion').value = '';
+      document.getElementById('filterAllocation').value = '';
+      loadJobs();
+    });
+
+    async function deleteBooking(id) {
+      if (!confirm('Delete this booking?')) return;
+      const res = await fetch(`/bookings/${id}`, { method: 'DELETE' });
+      if (res.ok) loadJobs();
+    }
+
+    loadJobs();
+  </script>
+</body>
+</html>

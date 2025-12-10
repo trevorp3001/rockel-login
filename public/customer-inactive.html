@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Customer – Inactive</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+   <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <main class="p-6">
+    <div class="mb-4">
+  <button onclick="exportCSV()" class="bg-green-700 text-white px-4 py-2 rounded">Export CSV</button>
+</div>
+
+    <h2 class="text-lg font-semibold mb-4">Inactive Customers (>3 months)</h2>
+    <table class="w-full bg-white shadow rounded" id="inactiveCustomersTable">
+      <thead class="bg-gray-200">
+        <tr>
+          <th class="p-2">Customer ID</th>
+          <th class="p-2">Name</th>
+          <th class="p-2">Company</th>
+          <th class="p-2">Last Booking</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <script>
+  async function loadInactiveCustomers() {
+    const res = await fetch('/api/reports/inactive-customers');
+    const data = await res.json();
+
+    const tbody = document.querySelector('#inactiveCustomersTable tbody');
+    tbody.innerHTML = '';
+
+    if (data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" class="p-2 text-center">No inactive customers</td></tr>`;
+      return;
+    }
+
+    data.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="p-2">${c.CustomerID}</td>
+        <td class="p-2">${c.FirstName} ${c.LastName}</td>
+        <td class="p-2">${c.Company || ''}</td>
+        <td class="p-2">${c.LastBooking || 'Never'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+  loadInactiveCustomers();
+
+  function exportCSV() {
+  window.location.href = '/api/reports/aged-receivables/export';
+}
+
+  </script>
+</body>
+</html>

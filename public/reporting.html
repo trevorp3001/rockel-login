@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tracking Reports | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <div class="max-w-7xl mx-auto bg-white p-6 rounded shadow">
+    <h2 class="text-2xl font-bold mb-4">Tracking Reports</h2>
+
+    <div class="flex gap-2 mb-4">
+      <input type="date" id="startDate" class="border rounded p-1" />
+      <input type="date" id="endDate" class="border rounded p-1" />
+      <button onclick="loadTracking()" class="bg-blue-700 text-white px-4 py-2 rounded">Filter</button>
+      <button onclick="clearFilter()" class="bg-gray-500 text-white px-4 py-2 rounded">Clear</button>
+      <button onclick="exportCSV()" class="bg-green-700 text-white px-4 py-2 rounded">Export CSV</button>
+    </div>
+
+
+    <table class="min-w-full text-sm border" id="reportTable">
+      <thead class="bg-gray-200">
+        <tr>
+          <th class="p-2">ItemQR</th>
+          <th class="p-2">Stage</th>
+          <th class="p-2">Timestamp</th>
+          <th class="p-2">Notes</th>
+          <th class="p-2">Container</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+ <script>
+function getDefaultDates() {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - 30); // last 30 days
+  const format = (d) => d.toISOString().split('T')[0];
+  return { start: format(start), end: format(end) };
+}
+
+async function loadTracking() {
+  let start = document.getElementById('startDate').value;
+  let end = document.getElementById('endDate').value;
+
+  if (!start || !end) {
+    const defaults = getDefaultDates();
+    start = defaults.start;
+    end = defaults.end;
+    document.getElementById('startDate').value = start;
+    document.getElementById('endDate').value = end;
+  }
+
+  const url = `/api/reports/tracking?start=${start}&end=${end}`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  const tbody = document.querySelector('#reportTable tbody');
+  tbody.innerHTML = '';
+
+  if (data.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="6" class="text-center p-2">No tracking records found</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
+  data.forEach(t => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${t.ItemQR || ''}</td>
+      <td>${t.Stage}</td>
+      <td>${t.Timestamp}</td>
+      <td>${t.Notes || ''}</td>
+      <td>${t.ContainerNumber || ''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function clearFilter() {
+  document.getElementById('startDate').value = '';
+  document.getElementById('endDate').value = '';
+  loadTracking(); // reload with default last 30 days
+}
+
+async function exportCSV() {
+  let start = document.getElementById('startDate').value;
+  let end = document.getElementById('endDate').value;
+
+  if (!start || !end) {
+    const defaults = getDefaultDates();
+    start = defaults.start;
+    end = defaults.end;
+  }
+
+  window.location.href = `/api/reports/tracking/export?start=${start}&end=${end}`;
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadTracking();
+});
+</script>
+
+</body>
+</html>

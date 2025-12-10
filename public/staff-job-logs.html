@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff – Job Logs</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+   <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <main class="p-6">
+
+    <div class="mb-4">
+  <button onclick="exportCSV()" class="bg-green-700 text-white px-4 py-2 rounded">Export CSV</button>
+</div>
+
+    <h2 class="text-lg font-semibold mb-4">Staff Job Logs</h2>
+    <table class="w-full bg-white shadow rounded" id="jobLogsTable">
+      <thead class="bg-gray-200">
+        <tr>
+          <th class="p-2">Booking ID</th>
+          <th class="p-2">Customer</th>
+          <th class="p-2">Driver</th>
+          <th class="p-2">Helper 1</th>
+          <th class="p-2">Helper 2</th>
+          <th class="p-2">Van</th>
+          <th class="p-2">Allocated At</th>
+          <th class="p-2">Booking Status</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <script>
+  async function loadJobLogs() {
+    const res = await fetch('/api/reports/job-logs');
+    const data = await res.json();
+
+    const tbody = document.querySelector('#jobLogsTable tbody');
+    tbody.innerHTML = '';
+
+    if (data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" class="p-2 text-center">No job logs found</td></tr>`;
+      return;
+    }
+
+    data.forEach(j => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="p-2">${j.BookingID}</td>
+        <td class="p-2">${j.CustomerName || ''}</td>
+        <td class="p-2">${j.DriverName || ''}</td>
+        <td class="p-2">${j.Helper1Name || ''}</td>
+        <td class="p-2">${j.Helper2Name || ''}</td>
+        <td class="p-2">${j.Van || ''}</td>
+        <td class="p-2">${j.AllocatedAt}</td>
+        <td class="p-2">${j.BookingStatus || ''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+  loadJobLogs();
+
+  function exportCSV() {
+  window.location.href = '/api/reports/job-logs/export';
+}
+
+  </script>
+</body>
+</html>

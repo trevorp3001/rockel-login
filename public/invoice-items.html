@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice Items | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #toast { transition: opacity 0.3s ease; }
+  </style>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <div id="toast" class="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded shadow hidden z-50"></div>
+
+  <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow">
+    <h2 class="text-2xl font-bold mb-1">Invoice Items</h2>
+    <div id="invoiceLabel" class="text-gray-600 font-bold mb-2"></div>
+    <div id="paymentSummary" class="text-gray-700 font-medium mb-4"></div>
+
+    <form id="itemForm" class="space-y-4 mb-6">
+      <input type="hidden" name="ItemID" id="ItemID" />
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <select id="presetSelect" class="p-2 border rounded">
+          <option value="">➕ Choose a preset item (optional)</option>
+        </select>
+        <input name="ItemName" placeholder="Item Name" class="p-2 border rounded" required />
+        <input name="Description" placeholder="Description" class="p-2 border rounded" />
+        <input name="Quantity" type="number" placeholder="Qty" class="p-2 border rounded" min="1" value="1" required />
+        <input name="UnitCost" type="number" placeholder="Unit Cost" class="p-2 border rounded" min="0" step="0.01" required />
+      </div>
+      
+<!-- Volume Pricing Assistant (in meters) -->
+<div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+  <input id="lengthInput" type="number" step="any" placeholder="Length (m)" class="p-2 border rounded" min="0" />
+  <input id="widthInput" type="number" step="any" placeholder="Width (m)" class="p-2 border rounded" min="0" />
+  <input id="heightInput" type="number" step="any" placeholder="Height (m)" class="p-2 border rounded" min="0" />
+  <div class="p-2 border rounded bg-gray-100 flex items-center justify-center">
+    Est. Cost: <span id="volumeCost" class="ml-2 font-bold text-blue-700">£0</span>
+  </div>
+  <button onclick="applyVolumeCost()" type="button" class="bg-blue-600 text-white px-3 py-2 rounded">Use This Price</button>
+</div>
+
+
+      <button id="formBtn" type="submit" class="bg-blue-700 text-white px-6 py-2 rounded">Add Item</button>
+    </form>
+
+    <div id="qrBox" class="mt-4"></div>
+
+    <div class="mb-4">
+      <button onclick="printSelectedLabels()" class="bg-purple-700 text-white px-4 py-2 rounded">🖨️ Print Selected Labels</button>
+    </div>
+
+    <table class="min-w-full text-sm bg-white border">
+      <thead class="bg-gray-200">
+        <tr>
+          <th class="p-3"><input type="checkbox" onclick="toggleAll(this)" /></th>
+          <th class="text-left p-3">Item</th>
+          <th class="text-left p-3">Description</th>
+          <th class="text-left p-3">Qty</th>
+          <th class="text-left p-3">Unit Cost</th>
+          <th class="text-left p-3">Total</th>
+<th class="text-left p-3">Tracking</th>
+          <th class="text-left p-3">QR</th>
+          <th class="text-left p-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="itemTable"></tbody>
+      <tfoot>
+        <tr class="bg-gray-100 font-semibold">
+          <td colspan="4" class="p-3 text-right">Subtotal:</td>
+          <td class="p-3" id="subtotal">0.00</td>
+          <td colspan="3"></td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="flex justify-between items-center mt-6">
+      <a id="backBtn" href="#" class="bg-green-600 text-white px-4 py-2 rounded">⬅️ Back to Invoice</a>
+      <button onclick="viewInvoice()" class="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded ml-2">🖨️ Print/Send Invoice</button>
+    </div>
+
+   <script>
+  const invoiceId = new URLSearchParams(window.location.search).get('invoiceId');
+  let editingItemId = null;
+  let actionToken = null;
+
+async function fetchActionToken() {
+  try {
+    const res = await fetch('/api/get-action-token', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('Failed to fetch action token');
+      return;
+    }
+    const data = await res.json();
+    actionToken = data.actionToken;
+  } catch (err) {
+    console.error('Error getting action token', err);
+  }
+}
+
+  function showToast(msg, success = true) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.className = `fixed top-4 right-4 px-4 py-2 rounded shadow z-50 ${success ? 'bg-green-600' : 'bg-red-600'} text-white`;
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 3000);
+  }
+
+  function editItem(id, name, desc, qty, cost, qr) {
+    console.log('Editing item:', id);
+    editingItemId = id;
+    document.getElementById('ItemID').value = id;
+    document.querySelector('[name="ItemName"]').value = name;
+    document.querySelector('[name="Description"]').value = desc;
+    document.querySelector('[name="Quantity"]').value = qty;
+    document.querySelector('[name="UnitCost"]').value = cost;
+    
+    
+    
+    document.getElementById('formBtn').textContent = 'Update Item';
+  }
+
+
+  async function deleteItem(id) {
+  if (!confirm('Delete this item?')) return;
+
+  if (!actionToken) {
+    showToast('Security token missing. Please reload the page.', false);
+    return;
+  }
+
+  const res = await fetch(`/invoice-items/${id}`, {
+    method: 'DELETE',
+    headers: {
+      'X-Action-Token': actionToken
+    }
+  });
+
+  if (res.status === 403) {
+    showToast('Security token expired. Please reload the page and try again.', false);
+    await fetchActionToken();
+    return;
+  }
+
+  if (res.ok) {
+    showToast('Item deleted');
+    loadItems();
+  } else {
+    showToast('Delete failed', false);
+  }
+}
+
+
+  async function loadItems() {
+    const res = await fetch(`/api/invoice-items-with-tracking/${invoiceId}`);
+    const items = await res.json();
+    const tbody = document.getElementById('itemTable');
+    tbody.innerHTML = '';
+    let subtotal = 0;
+
+    items.forEach(i => {
+      subtotal += i.TotalCost || 0;
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="p-3"><input type="checkbox" class="item-select" data-id="${i.ItemID}" /></td>
+        <td class="p-3">${i.ItemName}</td>
+        <td class="p-3">${i.Description || ''}</td>
+        <td class="p-3">${i.Quantity}</td>
+        <td class="p-3">£${parseFloat(i.UnitCost).toFixed(2)}</td>
+        <td class="p-3">£${parseFloat(i.TotalCost).toFixed(2)}</td>
+        <td class="p-3">${i.LatestStage || '—'}</td>
+        <td class="p-3">
+          ${i.ItemQR ? `<a href="/track-item?itemId=${i.ItemQR}" target="_blank" class="text-green-600 underline">View QR</a>` : ''}
+        </td>
+        <td class="p-3 space-x-2">
+          <button onclick="editItem(${i.ItemID}, \`${i.ItemName}\`, \`${i.Description || ''}\`, ${i.Quantity}, ${i.UnitCost}, \`${i.ItemQR || ''}\`)" class="text-blue-600">📝</button>
+          <button onclick="deleteItem(${i.ItemID})" class="text-red-600">🗑️</button>
+          <a href="/track-item?itemId=${i.ItemID}" class="text-indigo-600 underline">Track</a>
+          <button onclick="window.open('/print-qr-label.html?itemId=${i.ItemID}', '_blank')" class="ml-2 text-purple-600 underline">Print Label</button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    document.getElementById('subtotal').textContent = subtotal.toFixed(2);
+  }
+
+  document.getElementById('itemForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const form = e.target;
+
+  if (!actionToken) {
+    showToast('Security token missing. Please reload the page.', false);
+    return;
+  }
+
+  const formData = new URLSearchParams(new FormData(form)).toString();
+  const method = editingItemId ? 'PUT' : 'POST';
+  const target = editingItemId
+    ? `/invoice-items/${editingItemId}`
+    : `/invoice-items/${invoiceId}`;
+
+  const res = await fetch(target, {
+    method,
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-Action-Token': actionToken
+    },
+    body: formData
+  });
+
+  if (res.status === 403) {
+    showToast('Security token expired. Please reload the page and try again.', false);
+    await fetchActionToken();
+    return;
+  }
+
+  if (res.ok) {
+    let result;
+    try {
+      result = await res.json();
+    } catch {
+      result = {};
+    }
+
+    showToast(result.message || (editingItemId ? 'Item updated' : 'Item added'));
+
+    if (!editingItemId && result.qr) {
+      const qrDiv = document.createElement('div');
+      qrDiv.className = 'mt-4 p-4 bg-white border rounded';
+
+      const link = document.createElement('a');
+      link.href = result.qr;
+      link.target = '_blank';
+      link.className = 'text-blue-600 underline block mb-2';
+      link.textContent = '📎 View Tracking QR Link';
+
+      const itemId = result.qr;
+      const img = document.createElement('img');
+      img.src = `/qr/item/${itemId}`;
+      img.alt = 'QR Code';
+      img.className = 'w-32 h-32 border rounded';
+
+      qrDiv.appendChild(link);
+      qrDiv.appendChild(img);
+      document.getElementById('qrBox').innerHTML = '';
+      document.getElementById('qrBox').appendChild(qrDiv);
+    }
+
+    form.reset();
+    editingItemId = null;
+    document.getElementById('formBtn').textContent = 'Add Item';
+
+    loadItems();
+    await fetchActionToken(); // optional rotate token
+  } else {
+    showToast('Failed to save item', false);
+  }
+});
+
+
+  async function setBackButtonLink() {
+    const res = await fetch(`/invoices/single/${invoiceId}`);
+    const data = await res.json();
+    const invoice = data.invoice;
+    document.getElementById('backBtn').href = invoice?.CustomerID
+      ? `/invoices?customerId=${invoice.CustomerID}`
+      : '/invoices';
+  }
+
+  async function loadInvoiceLabel() {
+    const res = await fetch(`/invoices/single/${invoiceId}`);
+    const data = await res.json();
+    const invoice = data.invoice;
+    if (invoice) {
+      document.getElementById('invoiceLabel').textContent = `Invoice ${invoice.InvoiceNumber} - ${invoice['First Name'] || ''} ${invoice['Last Name'] || ''} (${invoice['Post Code'] || ''})`;
+    }
+  }
+
+  async function loadPresets() {
+    const res = await fetch('/presets');
+    const data = await res.json();
+    const select = document.getElementById('presetSelect');
+    data.forEach(p => {
+      const option = document.createElement('option');
+      option.value = p.PresetID;
+      option.textContent = `${p.ItemName} (£${p.DefaultPrice})`;
+      option.dataset.name = p.ItemName;
+      option.dataset.description = p.DefaultDescription;
+      option.dataset.price = p.DefaultPrice;
+      select.appendChild(option);
+    });
+  }
+
+  document.getElementById('presetSelect').addEventListener('change', e => {
+    const selected = e.target.selectedOptions[0];
+    if (selected && selected.value !== '') {
+      document.querySelector('[name="ItemName"]').value = selected.dataset.name;
+      document.querySelector('[name="Description"]').value = selected.dataset.description;
+      document.querySelector('[name="UnitCost"]').value = selected.dataset.price;
+    }
+  });
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await fetchActionToken();
+  await loadPresets();
+  await loadItems();
+  await setBackButtonLink();
+  await loadInvoiceLabel();
+});
+</script>
+<script>
+  const RATE = 425;
+  let latestCost = 0;
+
+  function calculateVolumePrice() {
+    const l = parseFloat(document.getElementById('lengthInput').value) || 0;
+    const w = parseFloat(document.getElementById('widthInput').value) || 0;
+    const h = parseFloat(document.getElementById('heightInput').value) || 0;
+
+    if (l && w && h) {
+      const volume = l * w * h;  // in cubic meters
+      const rawPrice = volume * RATE;
+      latestCost = Math.ceil(rawPrice / 5) * 5;
+      document.getElementById('volumeCost').textContent = `£${latestCost.toFixed(2)}`;
+    } else {
+      latestCost = 0;
+      document.getElementById('volumeCost').textContent = '£0';
+    }
+  }
+
+  function applyVolumeCost() {
+    const unitCostInput = document.querySelector('[name=UnitCost]');
+    if (unitCostInput && latestCost > 0) {
+      unitCostInput.value = latestCost.toFixed(2);
+    }
+  }
+
+  ['lengthInput', 'widthInput', 'heightInput'].forEach(id => {
+    document.getElementById(id).addEventListener('input', calculateVolumePrice);
+  });
+</script>
+<script>
+  function toggleAll(checkbox) {
+    const checkboxes = document.querySelectorAll('.item-select');
+    checkboxes.forEach(cb => {
+      cb.checked = checkbox.checked;
+    });
+  }
+
+  function printSelectedLabels() {
+    const selected = document.querySelectorAll('.item-select:checked');
+    if (selected.length === 0) {
+      alert('No items selected.');
+      return;
+    }
+
+    selected.forEach(cb => {
+      const itemId = cb.dataset.id;
+      if (itemId) {
+        window.open(`/print-qr-label.html?itemId=${itemId}`, '_blank');
+      }
+    });
+  }
+</script>
+<script>
+ async function viewInvoice() {
+  // Open printable preview in a new tab
+  if (invoiceId) {
+    window.open(`/invoice-detail.html?invoiceId=${invoiceId}`, '_blank');
+  } else {
+    showToast('Missing invoiceId in URL', false);
+    return;
+  }
+
+  // OPTIONAL: also email the invoice right away.
+  try {
+    if (!actionToken) {
+      await fetchActionToken();
+      if (!actionToken) {
+        showToast('Security token missing. Please reload the page.', false);
+        return;
+      }
+    }
+
+    const res = await fetch(`/email/invoice/${invoiceId}`, {
+      method: 'POST',
+      headers: {
+        'X-Action-Token': actionToken
+      }
+    });
+
+    if (res.status === 403) {
+      showToast('Security token expired. Please reload the page and try again.', false);
+      await fetchActionToken();
+      return;
+    }
+
+    if (!res.ok) throw new Error('Email failed');
+    showToast('Invoice emailed to customer');
+  } catch (e) {
+    showToast('Failed to email invoice', false);
+  }
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job List | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      body {
+        font-size: 12pt;
+        color: #000;
+        background: #fff;
+        margin: 1cm;
+      }
+      header, .no-print, button, a[href*="/job-list"], nav {
+        display: none !important;
+      }
+      .job-date-section {
+        page-break-after: always;
+      }
+      .job-card {
+        border: 1px solid #000;
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+      .job-group-title {
+        font-size: 16pt;
+        margin: 20px 0 10px;
+        border-bottom: 2px solid #000;
+      }
+      .job-subheading {
+        font-size: 14pt;
+        font-weight: bold;
+        margin: 10px 0;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans">
+<!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+<main class="p-6 max-w-7xl mx-auto">
+  <div class="flex justify-between items-center mb-6 no-print">
+    <h2 class="text-2xl font-bold">Job List</h2>
+    <div class="flex gap-2">
+      <input type="date" id="filterDate" class="p-2 border rounded" />
+      <select id="filterRegion" class="p-2 border rounded">
+        <option value="">All Regions</option>
+        <option value="London">London</option>
+        <option value="North">North</option>
+        <option value="South">South</option>
+        <option value="South-West">South-West</option>
+        <option value="Freetown">Freetown</option>
+        <option value="Other">Other</option>
+      </select>
+      <select id="filterAllocation" class="p-2 border rounded">
+        <option value="">All Allocations</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="6">6</option>
+        <option value="7">7</option>
+        <option value="8">8</option>
+        <option value="9">9</option>
+      </select>
+      <button onclick="window.print()" class="bg-green-600 text-white px-4 py-2 rounded">🖨️ Print</button>
+      <a href="/job-list-export" class="bg-blue-700 text-white px-4 py-2 rounded">⬇️ CSV</a>
+      <button id="resetFilters" class="bg-gray-500 text-white px-4 py-2 rounded">Reset</button>
+    </div>
+  </div>
+  <div id="jobListContainer"></div>
+</main>
+
+<script>
+  document.getElementById('resetFilters').addEventListener('click', () => {
+    document.getElementById('filterDate').value = '';
+    document.getElementById('filterRegion').value = '';
+    document.getElementById('filterAllocation').value = '';
+    loadJobs();
+  });
+
+  async function fetchJobData() {
+    const res = await fetch('/api/bookings/job-list');
+    return res.json();
+  }
+
+  function renderGroupedJobs(data) {
+    const container = document.getElementById('jobListContainer');
+    container.innerHTML = '';
+    const grouped = {};
+
+    data.forEach(b => {
+      const date = b.BookingDate;
+      const region = b.Region || 'Unknown';
+      const slot = b.BookingSlot || '1';
+
+      if (!grouped[date]) grouped[date] = {};
+      if (!grouped[date][region]) grouped[date][region] = {};
+      if (!grouped[date][region][slot]) grouped[date][region][slot] = [];
+
+      grouped[date][region][slot].push(b);
+    });
+
+    for (const date in grouped) {
+      const dateBlock = document.createElement('div');
+      dateBlock.className = "job-date-section";
+      dateBlock.innerHTML = `<h3 class="job-group-title">📅 ${date}</h3>`;
+
+      for (const region in grouped[date]) {
+        const regionBlock = document.createElement('div');
+        regionBlock.innerHTML = `<h4 class="job-subheading ml-4">📍 ${region}</h4>`;
+
+        for (const slot in grouped[date][region]) {
+          const slotBlock = document.createElement('div');
+          const bookings = grouped[date][region][slot];
+
+          const staff = bookings.find(b => b.DriverName || b.Helper1Name || b.Helper2Name || b.Van) || {};
+
+          slotBlock.innerHTML = `<h5 class="job-subheading ml-6">🧭 Allocation: ${slot}</h5>
+            ${(staff.DriverName || staff.Helper1Name || staff.Helper2Name || staff.Van)
+              ? `<div class="ml-6 text-sm text-blue-700 mb-2">
+                  👤 <strong>Driver:</strong> ${staff.DriverName || '—'} |
+                  <strong>Helper 1:</strong> ${staff.Helper1Name || '—'} |
+                  <strong>Helper 2:</strong> ${staff.Helper2Name || '—'} |
+                  <strong>Van:</strong> ${staff.Van || '—'}
+                </div>`
+              : ''}`;
+
+          const rows = bookings.map(b => `
+            <div class="job-card">
+              <div class="font-bold">${b.FirstName} ${b.LastName}</div>
+              <div>${b.Address1 || ''} ${b.PostCode || ''}</div>
+                <div>📞 ${[b.Phone1, b.Phone2, b.Phone3].filter(Boolean).join(' / ')}</div>
+              <div>${b['Afternoon/Evening'] || ''} | Allocation: ${b.BookingSlot}</div>
+              <div class="text-sm">${b.Notes || ''}</div>
+            </div>
+          `).join('');
+
+          slotBlock.innerHTML += rows;
+          regionBlock.appendChild(slotBlock);
+        }
+
+        dateBlock.appendChild(regionBlock);
+      }
+
+      container.appendChild(dateBlock);
+    }
+  }
+
+  function applyFilters(data) {
+    const selectedDate = document.getElementById('filterDate').value;
+    const selectedRegion = document.getElementById('filterRegion').value;
+    const selectedSlot = document.getElementById('filterAllocation').value;
+
+    return data.filter(b => {
+      const matchDate = !selectedDate || b.BookingDate === selectedDate;
+      const matchRegion = !selectedRegion || b.Region === selectedRegion;
+      const matchSlot = !selectedSlot || String(b.BookingSlot) === selectedSlot;
+      return matchDate && matchRegion && matchSlot;
+    });
+  }
+
+  async function loadJobs() {
+    const rawData = await fetchJobData();
+    const filtered = applyFilters(rawData);
+    renderGroupedJobs(filtered);
+  }
+
+  document.getElementById('filterDate').addEventListener('change', loadJobs);
+  document.getElementById('filterRegion').addEventListener('change', loadJobs);
+  document.getElementById('filterAllocation').addEventListener('change', loadJobs);
+
+  loadJobs();
+</script>
+</body>
+</html>

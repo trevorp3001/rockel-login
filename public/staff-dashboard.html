@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topnav">
+    <h1>Rockel Shipping – Staff Dashboard</h1>
+    <nav>
+      <a href="staff-dashboard.html">Dashboard</a>
+      <a href="/reports/audit">Audit Logs</a>
+        <a href="/staff/logout">Logout</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <h2>Welcome, Staff!</h2>
+    <p>You now have access to bookings, invoices, and container management.</p>
+
+    <section style="margin-top:20px;">
+      <h3>Quick Links</h3>
+      <ul>
+        <li><a href="#">📊 Reports</a></li>
+        <li><a href="#">🧾 Customer Invoices</a></li>
+        <li><a href="#">📦 Item Tracking</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+<script>
+async function checkAuth() {
+  const res = await fetch('/session-check', { credentials: 'include' });
+  const data = await res.json();
+  if (!data.loggedIn || data.role !== "Staff") {
+    window.location.href = '/staff-login.html';
+  }
+}
+checkAuth();
+</script>
+</html>

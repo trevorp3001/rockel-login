@@ -1,0 +1,60 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Invoice Message</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f7f7f7; }
+    .message-box {
+      background: #fff;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      white-space: pre-wrap;
+    }
+    .copy-btn {
+      margin-bottom: 15px;
+      padding: 10px 15px;
+      background: #25d366;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <button class="copy-btn" onclick="copyMessage()">📋 Copy Message</button>
+  <div class="message-box" id="messageBox">Loading...</div>
+
+  <script>
+    const invoiceId = new URLSearchParams(window.location.search).get("invoiceId");
+
+    fetch(`/api/invoice-message/${invoiceId}`)
+      .then(res => res.json())
+      .then(data => {
+        const msgLines = [];
+
+        msgLines.push(`🧾 Invoice: ${data.InvoiceNumber}`);
+        msgLines.push(`📤 Sender: ${data.Sender}`);
+        msgLines.push(`📦 Recipient:\n${data.ReceiverName}\n${data.Address1 || ''}\n${data.Address2 || ''}\n${data.PostCode || ''}\n${data.Country}`);
+        msgLines.push(`\n🧺 Items:`);
+        data.Items.forEach(item => {
+          msgLines.push(`- ${item.Quantity} x ${item.ItemName} [${item.Container || 'No container'} | ${item.Stage || 'No status'}]`);
+        });
+        msgLines.push(`\n💰 Paid: £${data.AmountPaid.toFixed(2)}\n🧾 Outstanding: £${data.Outstanding.toFixed(2)}\n📌 Status: ${data.InvoiceStatus}`);
+
+        document.getElementById("messageBox").textContent = msgLines.join("\n");
+      });
+
+    function copyMessage() {
+      const text = document.getElementById("messageBox").textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        alert("Message copied to clipboard!");
+      });
+    }
+  </script>
+</body>
+</html>

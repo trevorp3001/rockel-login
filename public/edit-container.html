@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Edit Container | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <div class="max-w-5xl mx-auto bg-white p-6 rounded shadow">
+    <h2 class="text-2xl font-bold mb-1">Edit Container</h2>
+      <div id="containerLabel" class="text-gray-600 font-bold mb-4"></div>
+
+
+    <form id="containerForm" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <input name="Vessel" placeholder="Vessel" class="p-2 border rounded" />
+        <input name="Carrier" placeholder="Carrier" class="p-2 border rounded" />
+        <select name="Status" class="p-2 border rounded">
+          <option value="">Select Status</option>
+          <option value="Preparing">Preparing</option>
+          <option value="In Transit">In Transit</option>
+          <option value="Arrived">Arrived</option>
+          <option value="Cleared">Cleared</option>
+        </select>
+        <label class="block font-semibold">Date Loaded:</label>
+        <input name="DateLoaded" type="date" placeholder="Date Loaded" class="p-2 border rounded" />
+        <label class="block font-semibold">Estimated Departure:</label>
+        <input name="ETD" type="date" placeholder="ETD" class="p-2 border rounded" />
+        <label class="block font-semibold">Estimated Arrival:</label>
+        <input name="ETA" type="date" placeholder="ETA" class="p-2 border rounded" />
+        <label class="block font-semibold">Date Arrived:</label>
+        <input name="DateArrived" type="date" placeholder="Date Arrived" class="p-2 border rounded" />
+        <label class="block font-semibold">Date Cleared:</label>
+        <input name="DateCleared" type="date" placeholder="Date Cleared" class="p-2 border rounded" />
+        <input name="BookingRef" placeholder="Booking Ref" class="p-2 border rounded" />
+        <input name="ContainerNumber" placeholder="Container Number/VIN" class="p-2 border rounded" />
+        <input name="ContainerSeal" placeholder="Container Seal/Reg" class="p-2 border rounded" />
+        <select name="Paid" class="p-2 border rounded">
+          <option value="">Paid for?</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+        </select>
+        <input name="Cost" type="number" step="0.01" placeholder="Cost" class="p-2 border rounded" />
+        <input name="Weight" placeholder="Weight" class="p-2 border rounded" />
+        <select name="Size" class="p-2 border rounded">
+          <option value="">Select Size</option>
+          <option value="20ft">20ft</option>
+          <option value="40ft">40ft</option>
+          <option value="Roro Vehicle">Roro Vehicle</option>
+        </select>
+        <input name="VoyageNumber" placeholder="Voyage Number" class="p-2 border rounded" />
+        <label class="flex items-center space-x-2">
+          <input type="checkbox" name="CustomerContainer" id="CustomerContainer" value="1" />
+          <span>Customer Container</span>
+        </label>
+        <label class="flex items-center space-x-2">
+          <input type="checkbox" name="VehicleRoro" id="VehicleRoro" value="1" />
+          <span>Vehicle Roro</span>
+        </label>
+      </div>
+      <textarea name="Notes" placeholder="Notes" class="w-full p-2 border rounded"></textarea>
+
+      <button type="submit" class="bg-blue-700 text-white px-6 py-2 rounded">Save Changes</button>
+      <a href="/containers-list" class="ml-4 text-blue-700 hover:underline">Back to Container List</a>
+    </form>
+  </div>
+
+  <script>
+     const containerId = new URLSearchParams(window.location.search).get('id');
+  let actionToken = null;
+
+  async function loadActionToken() {
+    const res = await fetch('/api/get-action-token');
+    const data = await res.json();
+    actionToken = data.actionToken;
+  }
+
+
+  async function loadContainer() {
+    const res = await fetch(`/containers/${containerId}`);
+    const data = await res.json();
+
+    for (const field in data) {
+      const input = document.querySelector(`[name=${field}]`);
+      if (input) input.value = data[field] || '';
+    }
+
+    document.getElementById('CustomerContainer').checked = data.CustomerContainer === 1;
+    document.getElementById('VehicleRoro').checked = data.VehicleRoro === 1;
+
+
+    // Show container number and ID in the label
+    document.getElementById('containerLabel').textContent = `Container ID: ${containerId} - ${data.ContainerNumber || ''}`;
+  }
+
+
+      document.getElementById('containerForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const formData = new URLSearchParams(new FormData(e.target)).toString();
+
+    const res = await fetch(`/containers/${containerId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Action-Token': actionToken
+      },
+      body: formData
+    });
+
+    if (res.ok) {
+      Toastify({ text: 'Container updated', backgroundColor: 'green', duration: 3000 }).showToast();
+    } else {
+      Toastify({ text: 'Update failed', backgroundColor: 'red', duration: 3000 }).showToast();
+    }
+  });
+
+
+    loadContainer();
+  </script>
+
+<hr class="my-6">
+<h2 class="text-xl font-semibold mb-2">Container Delays</h2>
+<form id="delayForm" class="bg-gray-50 border p-4 rounded mb-4">
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div>
+      <label class="block font-semibold">Delay Date:</label>
+      <input type="date" name="DelayDate" class="w-full p-2 border rounded" required>
+    </div>
+    <div>
+      <label class="block font-semibold">New ETA:</label>
+      <input type="date" name="NewETA" class="w-full p-2 border rounded" required>
+    </div>
+    <div>
+      <label class="block font-semibold">Reason:</label>
+      <input type="text" name="Reason" class="w-full p-2 border rounded" placeholder="e.g. Vessel breakdown">
+    </div>
+  </div>
+  <button type="submit" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded">Add Delay</button>
+</form>
+
+<div>
+  <h3 class="font-semibold mb-2">Previous Delays:</h3>
+  <ul id="delayList" class="list-disc pl-6 text-sm text-gray-700">Loading...</ul>
+</div>
+
+<script>
+  // containerId already declared above, no need to redeclare
+
+    document.getElementById("delayForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const data = Object.fromEntries(form.entries());
+
+    const res = await fetch(`/containers/${containerId}/delays`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Action-Token': actionToken
+      },
+      body: JSON.stringify(data)
+    });
+
+    if (res.ok) {
+      alert('Delay recorded!');
+      e.target.reset();
+      loadDelays();
+    } else {
+      alert('Failed to add delay.');
+    }
+  });
+
+  async function deleteDelay(delayDate) {
+    if (!confirm("Delete this delay?")) return;
+
+    const res = await fetch(`/containers/${containerId}/delays/${delayDate}`, {
+      method: 'DELETE',
+      headers: {
+        'X-Action-Token': actionToken
+      }
+    });
+
+    if (res.ok) {
+      loadDelays();
+    } else {
+      alert("Failed to delete delay.");
+    }
+  }
+
+
+  async function loadDelays() {
+    const res = await fetch(`/containers/${containerId}/delays`);
+    const delays = await res.json();
+    const list = document.getElementById("delayList");
+
+    list.innerHTML = delays.length
+      ? delays.map((d, i) => `
+          <li class="mb-1">
+            📅 ${d.DelayDate} → ETA ${d.NewETA}${d.Reason ? ' (' + d.Reason + ')' : ''}
+            <button onclick="deleteDelay('${d.DelayDate}')" class="ml-2 text-red-600">Delete</button>
+          </li>
+        `).join("")
+      : "<li>No recorded delays.</li>";
+  }
+
+
+    window.onload = async () => {
+    await loadActionToken();
+    await loadContainer();
+    await loadDelays();
+  };
+
+
+</script>
+
+</body>
+</html>

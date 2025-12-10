@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rockel Shipping - Your Invoices</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="portal-header">
+  <a href="https://www.rockelshippingcompany.com" target="_blank" class="logo-link">
+    <img src="images/rockellogo.png" alt="Rockel Shipping Logo" class="logo">
+  </a>
+  <h2>Customer Portal</h2>
+</header>
+
+<ul>
+  <li><a href="https://www.rockelshippingcompany.com">Go back to RockelShippingCompany.com</a></li>
+  <li><a href="/portal/logout">Logout</a></li>
+</ul>
+
+
+  <div class="invoice-container">
+  <h1>Your Invoices</h1>
+  
+  <!-- ✅ Responsive wrapper -->
+  <div class="table-responsive">
+    <table id="invoiceTable">
+      <thead>
+        <tr>
+          <th>Invoice Number</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Balance (£)</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="invoiceBody"></tbody>
+    </table>
+  </div>
+
+  <p id="error" style="color:red; display:none;"></p>
+</div>
+
+
+ <script>
+  async function loadInvoices() {
+    const customerId = localStorage.getItem('customerId');
+    if (!customerId) {
+      window.location.href = '/portal-login.html';
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/portal/${customerId}/invoices`);
+      const invoices = await res.json();
+
+      if (!res.ok) {
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').innerText = invoices.error || 'Failed to load invoices';
+        return;
+      }
+
+      const tbody = document.getElementById('invoiceBody');
+      tbody.innerHTML = '';
+
+      invoices.forEach(inv => {
+        const row = document.createElement('tr');
+
+        // 🎨 status chip
+        let statusClass = '';
+        if (inv.status === 'Paid') statusClass = 'chip chip-green';
+        else if (inv.status === 'Partial') statusClass = 'chip chip-yellow';
+        else statusClass = 'chip chip-red';
+
+        // ⚖️ business rule: tracking only if Paid
+        let actionCell = '';
+        if (inv.status === 'Paid') {
+          actionCell = `<button onclick="viewTracking(${inv.InvoiceID})">View Tracking</button>`;
+        } 
+        
+        else {
+          actionCell = `
+            <div>
+              <p>Please complete payment to unlock tracking. If you believe this incorrect please call 02085956688.</p>
+              <p>Bank: Rockel Bank Ltd<br>
+                Sort Code: 12-34-56<br>
+                Account: 12345678</p>
+              <p>Or</p>
+              <button class="pay-btn" onclick="goToPay(${inv.InvoiceID})">Pay Now</button>
+            </div>`;
+        }
+
+
+
+        row.innerHTML = `
+          <td>${inv.InvoiceNumber}</td>
+          <td>${new Date(inv.InvoiceDate).toLocaleDateString()}</td>
+          <td><span class="${statusClass}">${inv.status}</span></td>
+          <td>${inv.balance}</td>
+          <td>${actionCell}</td>
+        `;
+
+        tbody.appendChild(row);
+      });
+    } catch (err) {
+      console.error('Error loading invoices:', err);
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('error').innerText = 'Network error, please try again.';
+    }
+  }
+
+  function viewTracking(invoiceId) {
+    localStorage.setItem('invoiceId', invoiceId);
+    window.location.href = '/portal-tracking.html';
+  }
+
+  loadInvoices();
+
+  function payInvoice(invoiceId) {
+    alert(`Payment flow coming soon for Invoice ID: ${invoiceId}`);
+  }
+
+  function goToPay(invoiceId) {
+    localStorage.setItem('invoiceId', invoiceId);
+    window.location.href = '/portal-pay.html';
+  }
+
+
+</script>
+</body>
+</html>

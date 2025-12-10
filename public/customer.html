@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Page | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body class="bg-gray-100 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <div class="flex flex-row min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white shadow p-4 space-y-4">
+      <nav class="flex flex-col space-y-2">
+        <a href="/job-list" class="hover:underline">Job List</a>
+        <a href="/job-list-all" class="hover:underline">All Job Lists</a>
+        <a href="/booking-allocation-form" class="hover:underline">Bookings Allocation Form</a>
+        <a href="/staff-allocation" class="hover:underline">Staff Allocation Form</a>
+        <a href="/container-invoice-list" class="hover:underline">Container Lists</a>
+        <a href="/container-volume-counter" class="hover:underline">Container Volume Counter</a>
+        <a href="/partially-shipped" class="hover:underline">Left behind list</a>        
+        <a href="/debtors-list" class="hover:underline">Debtors List</a>
+        <hr class="my-2" />
+        <span class="text-gray-500 uppercase text-xs">Text Lists</span>
+        <a href="/area-text-list" class="hover:underline">Area Text List</a>
+        <a href="/booking-text-list" class="hover:underline">Booking Text List</a>
+        <a href="/invoice-text-list" class="hover:underline">Invoice Text List</a>
+        <hr class="my-2" />
+        <a href="/status-selection" class="hover:underline">Tracking selection</a>
+        <a href="/scan-batch" class="hover:underline">Bulk Tracking</a>
+        <hr class="my-2" />
+        <a href="/referrals-dashboard" class="hover:underline">Referrals Dashboard</a>
+        <a href="/referrals-ledger" class="hover:underline">Referrals Ledger</a>
+        <hr class="my-2" />
+        <a href="/staff-form" class="hover:underline">Staff</a>
+        <a href="/preset-items" class="hover:underline">Preset Items</a>
+        <hr class="my-2" />
+        <a href="/finance-revenue-report" class="hover:underline">Revenue by Month</a>
+        <a href="/finance-aged-receivables" class="hover:underline">Aged Receivables</a>
+        <a href="/customer-reports" class="hover:underline">Customer Reports</a>
+        <a href="/customer-inactive" class="hover:underline">Inactive Customers</a>
+        <a href="/feedback-dashboard" class="hover:underline">Feedback Dashboard</a>
+        <a href="/staff-reports" class="hover:underline">Staff Reports</a>
+        <a href="/staff-job-logs" class="hover:underline">Staff Jobs Logs</a>
+        <hr class="my-2" />
+        <a href="/company-settings" class="hover:underline">Company Details</a>
+        <a href="#" class="hover:underline">Settings</a>
+      </nav>
+    </aside>
+
+    <!-- Main content -->
+    <main class="flex-1 p-6">
+      <!-- Top bar -->
+      <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+        <input id="searchInput" type="text" placeholder="Search customers..." class="w-full md:w-1/3 p-2 border border-gray-300 rounded" />
+        <a href="/add-customer-form" class="bg-green-600 text-white px-4 py-2 rounded flex items-center">
+          <i class="fas fa-plus mr-2"></i> Add Customer
+        </a>
+      </div>
+
+      <!-- Customer Table -->
+      <div class="bg-white shadow rounded overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-gray-200">
+            <tr>
+              <th class="text-left p-3">First Name</th>
+              <th class="text-left p-3">Last Name</th>
+              <th class="text-left p-3">Company</th>
+              <th class="text-left p-3">Address 1</th>
+              <th class="text-left p-3">Post Code</th>
+              <th class="text-left p-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Rows will be inserted here by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script>
+
+    let actionToken = null;
+
+async function fetchActionToken() {
+  try {
+    const res = await fetch('/api/get-action-token', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('Failed to fetch action token');
+      return;
+    }
+    const data = await res.json();
+    actionToken = data.actionToken;
+  } catch (err) {
+    console.error('Error getting action token', err);
+  }
+}
+
+    let allCustomers = [];
+
+    async function loadCustomers() {
+      try {
+        const response = await fetch('/customers', { credentials: 'include' });
+        if (!response.ok) throw new Error('Failed to fetch customers');
+        const customers = await response.json();
+        allCustomers = customers;
+        renderCustomerTable(customers);
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function renderCustomerTable(customers) {
+      const tbody = document.querySelector('tbody');
+      tbody.innerHTML = '';
+      customers.forEach(c => {
+        const row = document.createElement('tr');
+        row.classList.add('border-t');
+        row.innerHTML = `
+          <td class="p-3">${c['First Name']}</td>
+          <td class="p-3">${c['Last Name']}</td>
+          <td class="p-3">${c.Company}</td>
+          <td class="p-3">${c['Address 1']}</td>
+          <td class="p-3">${c['Post Code']}</td>
+          <td class="p-3 space-x-2">
+            <a href="/view-customer?id=${c.CustomerID}" class="text-blue-600"><i class="fas fa-eye"></i></a>
+            <button class="text-red-600" onclick="confirmDelete(${c.CustomerID})"><i class="fas fa-trash"></i></button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function filterCustomers(keyword) {
+      const filtered = allCustomers.filter(c => {
+        const values = [
+          c['First Name'],
+          c['Last Name'],
+          c.Company,
+          c['Phone 1'],
+          c['Phone 2'],
+          c['Phone 3'],
+          c['Address 1'],
+          c['Address 2'],
+          c['Post Code'],
+          c['Web Page']
+        ].join(' ').toLowerCase();
+        return values.includes(keyword);
+      });
+      renderCustomerTable(filtered);
+    }
+
+    document.getElementById('searchInput').addEventListener('input', e => {
+      const keyword = e.target.value.toLowerCase();
+      filterCustomers(keyword);
+    });
+
+    async function confirmDelete(id) {
+  if (!confirm('Are you sure you want to delete this customer?')) return;
+
+  try {
+    if (!actionToken) {
+      await fetchActionToken();
+    }
+
+    const res = await fetch(`/customer/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: {
+        'X-Action-Token': actionToken
+      }
+    });
+
+    if (!res.ok) throw new Error('Delete failed');
+    alert('Customer deleted.');
+    await fetchActionToken(); // refresh for next time
+    loadCustomers();
+  } catch (err) {
+    alert('Error deleting customer');
+  }
+}
+
+
+    window.onload = async () => {
+  await fetchActionToken();
+  loadCustomers();
+};
+
+  </script>
+</body>
+</html>

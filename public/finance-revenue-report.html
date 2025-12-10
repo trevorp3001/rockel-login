@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📊 Revenue Report</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  <div class="max-w-4xl mx-auto p-6">
+    <h1 class="text-2xl font-bold mb-4">📊 Revenue by Month</h1>
+    <button onclick="downloadCSV()" class="mb-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+      Download CSV
+    </button>
+    <div class="overflow-x-auto bg-white rounded shadow">
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-200 text-left">
+          <tr>
+            <th class="p-3">Month</th>
+            <th class="p-3">Total Revenue (£)</th>
+            <th class="p-2 text-left">Outstanding (£)</th>
+            <th class="p-3">Invoices</th>
+            <th class="p-3">Bookings</th>
+          </tr>
+        </thead>
+        <tbody id="revenue-table" class="divide-y"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+async function loadRevenue() {
+  const res = await fetch('/api/reports/revenue-by-month');
+  const data = await res.json();
+
+  const tbody = document.querySelector('#revenue-table');
+  tbody.innerHTML = '';
+  data.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="p-2">${row.Month}</td>
+      <td class="p-2">£${row.InvoiceTotal || 0}</td>
+      <td class="p-2">£${(row.InvoiceTotal || 0) - (row.PaymentTotal || 0)}</td>
+      <td class="p-2">${row.InvoiceCount || 0}</td>
+      <td class="p-2">${row.BookingCount || 0}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+loadRevenue();
+</script>
+</body>
+</html>

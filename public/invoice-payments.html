@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice Payments | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #toast { transition: opacity 0.3s ease; }
+  </style>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  <div id="toast" class="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded shadow hidden z-50"></div>
+
+  <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+    <h2 class="text-2xl font-bold mb-1">Invoice Payments</h2>
+      <div id="invoiceLabel" class="text-gray-600 font-bold mb-2"></div>
+      <div id="paymentSummary" class="text-gray-700 font-medium mb-4"></div>
+
+      <div id="paymentLabel" class="text-gray-600 font-bold mb-4"></div>
+      <div id="balanceLabel" class="text-red-600 font-bold mb-6"></div>
+
+
+    <form id="paymentForm" class="space-y-4 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <input name="AmountPaid" type="number" placeholder="Amount Paid" class="p-2 border rounded" min="0" step="0.01" required />
+        <input name="PaymentDate" id="PaymentDate" type="date" class="p-2 border rounded" required />
+        <select name="PaymentMethod" class="p-2 border rounded" required>
+          <option value="">Payment Method</option>
+          <option value="cash">Cash</option>
+          <option value="card">Card</option>
+          <option value="bank">Bank</option>
+          <option value="Freetown">Freetown</option>
+        </select>
+      </div>
+      <button type="submit" class="bg-blue-700 text-white px-6 py-2 rounded">Add Payment</button>
+    </form>
+
+    <!-- REFERRAL CREDIT PANEL -->
+<div id="referralCreditPanel" style="margin-top: 1rem; display: none; border: 1px solid #ccc; padding: 10px;">
+  <h3>Referral Credit</h3>
+  <p>
+    Available credit: £<span id="refCreditAvailable">0.00</span><br>
+    Outstanding balance: £<span id="refCreditOutstanding">0.00</span>
+  </p>
+
+  <label>
+    Amount to apply:
+    <input type="number" id="refCreditAmount" step="0.01" min="0">
+  </label>
+
+  <button type="button" id="btnApplyReferralCredit" class="bg-blue-700 text-white px-6 py-2 rounded">Apply Referral Credit</button>
+</div>
+
+
+    <table class="min-w-full text-sm bg-white border">
+      <thead class="bg-gray-200">
+        <tr>
+          <th class="text-left p-3">Date</th>
+          <th class="text-left p-3">Amount</th>
+          <th class="text-left p-3">Method</th>
+          <th class="text-left p-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="paymentTable">
+        <!-- Payments will be inserted here -->
+      </tbody>
+      <tfoot>
+        <tr class="bg-gray-100 font-semibold">
+          <td colspan="3" class="p-3 text-right">Total Paid:</td>
+          <td class="p-3" id="totalPaid">0.00</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="mt-6">
+      <a id="backBtn" href="#" class="bg-green-600 text-white px-4 py-2 rounded">Back to Invoice</a>
+    </div>
+  </div>
+
+  <script>
+  const invoiceId = new URLSearchParams(window.location.search).get('invoiceId');
+  let customerId = null; // set from /invoice-payments response
+  let actionToken = null;
+
+  // =========================
+  // Action Token
+  // =========================
+  async function getActionToken() {
+    try {
+      const res = await fetch('/api/get-action-token');
+      if (!res.ok) throw new Error('Failed to get action token');
+      const data = await res.json();
+      actionToken = data.actionToken;
+    } catch (err) {
+      console.error('❌ Error fetching action token:', err);
+      alert('Security initialisation failed. Please reload the page.');
+    }
+  }
+
+  // =========================
+  // Toast Helper
+  // =========================
+  function showToast(msg, success = true) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.className = `fixed top-4 right-4 px-4 py-2 rounded shadow z-50 ${
+      success ? 'bg-green-600' : 'bg-red-600'
+    } text-white`;
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 3000);
+  }
+
+  // =========================
+  // Load Payments + Referral Credit
+  // =========================
+  async function loadPayments() {
+    const res = await fetch(`/invoice-payments/${invoiceId}`);
+    if (!res.ok) {
+      showToast('Failed to load payments', false);
+      return;
+    }
+
+    const data = await res.json();
+    const { payments, Subtotal, TotalPaid, Outstanding, customerId: returnedCustomerId } = data;
+    customerId = returnedCustomerId;
+
+    const tbody = document.getElementById('paymentTable');
+    tbody.innerHTML = '';
+
+    payments.forEach(p => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="p-3">${p.PaymentDate}</td>
+        <td class="p-3">£${parseFloat(p.AmountPaid).toFixed(2)}</td>
+        <td class="p-3">${p.PaymentMethod}</td>
+        <td class="p-3">
+          <button onclick="deletePayment(${p.PaymentID})" class="text-red-600">🗑️</button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    document.getElementById('totalPaid').textContent = `£${parseFloat(TotalPaid).toFixed(2)}`;
+    document.getElementById('balanceLabel').textContent =
+      `Outstanding Balance: £${parseFloat(Outstanding).toFixed(2)}`;
+
+    // 🔹 Load referral credit panel (if any) using same summary
+    await loadReferralCredit(customerId, Outstanding);
+
+    updateBackButton();
+  }
+
+  // =========================
+  // Invoice Details Label
+  // =========================
+  async function loadInvoiceDetails() {
+    const res = await fetch(`/invoices/single/${invoiceId}`);
+    if (!res.ok) {
+      showToast('Failed to load invoice details', false);
+      return;
+    }
+
+    const data = await res.json();
+    const invoice = data.invoice;
+
+    const customerName = (invoice['First Name'] || '') + ' ' + (invoice['Last Name'] || '');
+    const invoiceNumber = invoice.InvoiceNumber || '';
+
+    document.getElementById('paymentLabel').textContent =
+      `Customer: ${customerName.trim()} | Invoice: ${invoiceNumber}`;
+  }
+
+  // =========================
+  // Header Summary (Total / Paid / Outstanding)
+  // =========================
+  async function loadInvoiceHeader() {
+    const res = await fetch(`/invoice-payments/${invoiceId}`);
+    if (!res.ok) return;
+
+    const data = await res.json();
+
+    document.getElementById('paymentSummary').innerHTML = `
+      Total: £${parseFloat(data.Subtotal).toFixed(2)} |
+      Paid: £${parseFloat(data.TotalPaid).toFixed(2)} |
+      Outstanding: £${parseFloat(data.Outstanding).toFixed(2)}
+    `;
+  }
+
+  // =========================
+  // Referral Reward Trigger (when invoice becomes fully paid)
+  // =========================
+  async function checkAndTriggerReferral() {
+    try {
+      const res = await fetch(`/invoice-payments/${invoiceId}`);
+      if (!res.ok) {
+        console.warn('Could not fetch invoice summary for referral check');
+        return;
+      }
+
+      const data = await res.json();
+      const outstanding = Number(data.Outstanding);
+
+      if (!Number.isFinite(outstanding)) {
+        console.warn('Outstanding value is not numeric, skipping referral check');
+        return;
+      }
+
+      // Only trigger when balance is fully cleared (or slightly negative, just in case)
+      if (outstanding > 0) return;
+
+      if (!actionToken) {
+        console.warn('No action token available for referral mark-paid');
+        return;
+      }
+
+      const markRes = await fetch(`/api/invoices/${invoiceId}/mark-paid`, {
+        method: 'POST',
+        headers: {
+          'X-Action-Token': actionToken
+        }
+      });
+
+      if (markRes.status === 403) {
+        console.warn('Referral mark-paid token invalid or missing');
+        await getActionToken(); // refresh for future actions
+        return;
+      }
+
+      if (!markRes.ok) {
+        console.warn('Referral mark-paid request failed with status', markRes.status);
+        return;
+      }
+
+      const r = await markRes.json().catch(() => ({}));
+      if (r && r.message === 'Referral rewards issued') {
+        showToast('Referral rewards issued ✅');
+      } else {
+        console.log('Referral mark-paid response:', r);
+      }
+    } catch (err) {
+      console.error('Error during referral mark-paid flow:', err);
+    }
+  }
+
+  // =========================
+  // Delete Payment
+  // =========================
+  async function deletePayment(id) {
+    if (!confirm('Delete this payment?')) return;
+
+    if (!actionToken) {
+      showToast('Security token missing. Please reload the page.', false);
+      return;
+    }
+
+    const res = await fetch(`/invoice-payments/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'X-Action-Token': actionToken
+      }
+    });
+
+    if (res.status === 403) {
+      showToast('Security token missing or invalid. Please reload the page and try again.', false);
+      await getActionToken(); // refresh for next time
+      return;
+    }
+
+    if (res.ok) {
+      showToast('Payment deleted');
+      await loadPayments();
+      await loadInvoiceDetails();
+      await loadInvoiceHeader();
+    } else {
+      showToast('Failed to delete payment', false);
+    }
+  }
+
+  // =========================
+  // Add Payment (normal cash/card/bank/Freetown)
+  // =========================
+  document.getElementById('paymentForm').addEventListener('submit', async e => {
+    e.preventDefault();
+
+    if (!actionToken) {
+      showToast('Security token missing. Please reload the page.', false);
+      return;
+    }
+
+    const formData = new URLSearchParams(new FormData(e.target)).toString();
+
+    const res = await fetch(`/invoice-payments/${invoiceId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Action-Token': actionToken
+      },
+      body: formData
+    });
+
+    if (res.status === 403) {
+      showToast('Security token missing or invalid. Please reload the page.', false);
+      await getActionToken(); // refresh token for next time
+      return;
+    }
+
+    if (res.ok) {
+      showToast('Payment added');
+      e.target.reset();
+      await loadPayments();
+      await loadInvoiceDetails();
+      await loadInvoiceHeader();
+      await checkAndTriggerReferral();   // still triggers referral rewards when fully paid
+    } else {
+      showToast('Failed to add payment', false);
+    }
+  });
+
+  // =========================
+  // Back Link
+  // =========================
+  function updateBackButton() {
+    if (customerId) {
+      document.getElementById('backBtn').href = `/invoices?customerId=${customerId}`;
+    }
+  }
+
+  // =========================
+  // Referral Credit UI + Logic
+  // =========================
+  async function loadReferralCredit(customerId, outstanding) {
+    const panel = document.getElementById('referralCreditPanel');
+    if (!panel) return;
+
+    if (!customerId) {
+      panel.style.display = 'none';
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/customers/${customerId}/referral-credit`);
+      if (!res.ok) {
+        console.warn('Could not fetch referral credit');
+        panel.style.display = 'none';
+        return;
+      }
+
+      const credit = await res.json();
+      const available = Number(credit.available || 0);
+      const outstandingNum = Number(outstanding || 0);
+
+      document.getElementById('refCreditAvailable').textContent = available.toFixed(2);
+      document.getElementById('refCreditOutstanding').textContent = outstandingNum.toFixed(2);
+
+      const suggested = Math.min(available, outstandingNum);
+      document.getElementById('refCreditAmount').value =
+        suggested > 0 ? suggested.toFixed(2) : '';
+
+      if (available > 0 && outstandingNum > 0) {
+        panel.style.display = 'block';
+      } else {
+        panel.style.display = 'none';
+      }
+    } catch (err) {
+      console.error('Error loading referral credit', err);
+      panel.style.display = 'none';
+    }
+  }
+
+  async function applyReferralCredit() {
+    if (!actionToken) {
+      showToast('Security token missing. Please reload the page.', false);
+      return;
+    }
+
+    const amountInput = document.getElementById('refCreditAmount');
+    const raw = amountInput.value.trim();
+    const amount = raw ? parseFloat(raw) : NaN;
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast('Enter a valid credit amount', false);
+      return;
+    }
+
+    try {
+      const body = new URLSearchParams({ amount: amount.toFixed(2) }).toString();
+
+      const res = await fetch(`/api/invoices/${invoiceId}/apply-referral-credit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Action-Token': actionToken
+        },
+        body
+      });
+
+      if (res.status === 403) {
+        showToast('Security token missing or invalid. Please reload the page.', false);
+        await getActionToken();
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.success) {
+        showToast(data.error || 'Failed to apply referral credit', false);
+        return;
+      }
+
+      const applied = Number(data.applied || amount);
+      showToast(`Referral credit applied: £${applied.toFixed(2)}`);
+
+      // Refresh everything as if a normal payment was added
+      await loadPayments();
+      await loadInvoiceDetails();
+      await loadInvoiceHeader();
+      await checkAndTriggerReferral();
+    } catch (err) {
+      console.error('Error applying referral credit', err);
+      showToast('Error applying referral credit', false);
+    }
+  }
+
+  // =========================
+  // Init
+  // =========================
+  // Default payment date to today
+  document.getElementById('PaymentDate').value =
+    new Date().toISOString().split('T')[0];
+
+  // Wire up referral credit button
+  const btnApplyReferralCredit = document.getElementById('btnApplyReferralCredit');
+  if (btnApplyReferralCredit) {
+    btnApplyReferralCredit.addEventListener('click', applyReferralCredit);
+  }
+
+  // Start page
+  (async () => {
+    await getActionToken();
+    await loadPayments();
+    await loadInvoiceDetails();
+    await loadInvoiceHeader();
+  })();
+</script>
+    
+</body>
+</html>

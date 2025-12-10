@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoices | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+
+  <main class="p-6 max-w-7xl mx-auto">
+    <h2 class="text-2xl font-bold mb-4">All Invoices</h2>
+
+    <input type="text" id="invoiceSearch" placeholder="Search invoices..." class="mb-4 w-full p-2 border rounded" />
+
+    <table class="min-w-full bg-white border rounded shadow text-sm">
+      <thead class="bg-gray-200">
+        <tr>
+          <th class="p-3 text-left">Invoice #</th>
+          <th class="p-3 text-left">Date</th>
+          <th class="p-3 text-left">Sender</th>
+          <th class="p-3 text-left">Receiver</th>
+          <th class="p-3 text-left">Shipped</th>
+          <th class="p-3 text-left">Status</th>
+          <th class="p-3 text-left">Total</th>
+          <th class="p-3 text-left">Paid</th>
+          <th class="p-3 text-left">Balance</th>
+          <th class="p-3 text-left">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="invoiceTable">
+        <!-- Invoices inserted here dynamically -->
+      </tbody>
+    </table>
+  </main>
+
+  <script>
+    let actionToken = null;
+
+async function fetchActionToken() {
+  try {
+    const res = await fetch('/api/get-action-token', { credentials: 'include' });
+    if (!res.ok) {
+      console.error('Failed to fetch action token');
+      return;
+    }
+    const data = await res.json();
+    actionToken = data.actionToken;
+  } catch (err) {
+    console.error('Error getting action token', err);
+  }
+}
+
+
+    async function loadInvoices() {
+      const res = await fetch('/invoices/all');
+      const invoices = await res.json();
+      const table = document.getElementById('invoiceTable');
+      table.innerHTML = '';
+      invoices.forEach(inv => {
+        const balance = (inv.TotalAmount || 0) - (inv.AmountPaid || 0);
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="p-3">${inv.InvoiceNumber}</td>
+          <td class="p-3">${inv.InvoiceDate}</td>
+          <td class="p-3">${inv.CustomerFullName || ''}</td>
+          <td class="p-3">${inv.ReceiverName || ''}</td>
+          <td class="p-3" id="track-${inv.InvoiceID}">⏳</td>
+          <td class="p-3">${inv.Status}</td>
+          <td class="p-3">${(inv.TotalAmount || 0).toFixed(2)}</td>
+          <td class="p-3">${(inv.AmountPaid || 0).toFixed(2)}</td>
+          <td class="p-3">${balance.toFixed(2)}</td>
+          <td class="p-3 space-x-1">
+            <a href="/invoice-items?invoiceId=${inv.InvoiceID}" title="Items">📦</a>
+            <a href="/invoice-payments?invoiceId=${inv.InvoiceID}" title="Payments">💳</a>
+            <a href="/view-customer?id=${inv.CustomerID}" title="Customer">👤</a>
+            <a href="/edit-invoice?id=${inv.InvoiceID}" title="Edit">✏️</a>
+            <a href="/invoice-detail.html?invoiceId=${inv.InvoiceID}" title="View">🔍</a>
+            <button onclick="deleteInvoice(${inv.InvoiceID})" class="text-red-600 hover:underline">🗑️</button>
+          </td>
+        `;
+        table.appendChild(row);
+fetch(`/invoices/tracking-summary/${inv.InvoiceID}`)
+          .then(res => res.json())
+          .then(data => {
+            document.getElementById(`track-${inv.InvoiceID}`).textContent = data.summary;
+          })
+          .catch(() => {
+            document.getElementById(`track-${inv.InvoiceID}`).textContent = '❌';
+          });
+      });
+    }
+
+    async function deleteInvoice(id) {
+  if (!confirm('Are you sure you want to delete this invoice? This cannot be undone.')) return;
+
+  if (!actionToken) {
+    alert('Security token missing. Please reload the page and try again.');
+    return;
+  }
+
+  const res = await fetch(`/invoices/${id}`, {
+    method: 'DELETE',
+    headers: {
+      'X-Action-Token': actionToken
+    }
+  });
+
+  if (res.status === 403) {
+    alert('Security token invalid or expired. Please reload the page and try again.');
+    await fetchActionToken(); // optional refresh for the next action
+    return;
+  }
+
+  if (res.ok) {
+    alert('Invoice deleted');
+    loadInvoices(); // reload table
+  } else {
+    alert('Failed to delete invoice');
+  }
+}
+
+
+    document.getElementById('invoiceSearch').addEventListener('input', function () {
+      const query = this.value.toLowerCase();
+      document.querySelectorAll('#invoiceTable tr').forEach(row => {
+        row.style.display = row.innerText.toLowerCase().includes(query) ? '' : 'none';
+      });
+    });
+
+    document.addEventListener('DOMContentLoaded', async () => {
+  await fetchActionToken();
+  await loadInvoices();
+});
+  </script>
+</body>
+</html>

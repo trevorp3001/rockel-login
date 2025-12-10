@@ -1,0 +1,324 @@
+//Add reporting routes
+app.get('/reporting', (req, res) => {
+  if (!req.session.username) return res.status(403).send('Unauthorized');
+
+  const { start, end } = req.query;
+  let query = `
+    SELECT t.ItemQR, t.Stage, t.Timestamp, t.Notes, c.ContainerNumber
+    FROM tracking t
+    LEFT JOIN containers c ON t.ContainerID = c.ContainerID
+    WHERE 1 = 1
+  `;
+  const params = [];
+
+  if (start) {
+    query += ' AND DATE(t.Timestamp) >= ?';
+    params.push(start);
+  }
+  if (end) {
+    query += ' AND DATE(t.Timestamp) <= ?';
+    params.push(end);
+  }
+
+  query += ' ORDER BY t.Timestamp DESC';
+
+  customerDB.all(query, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: 'Failed to load reports' });
+    res.json(rows);
+  });
+});
+
+app.get('/reporting/export', (req, res) => {
+  if (!req.session.username) return res.status(403).send('Unauthorized');
+
+  const query = `
+    SELECT t.ItemQR, t.Stage, t.Timestamp, t.Notes, c.ContainerNumber
+    FROM tracking t
+    LEFT JOIN containers c ON t.ContainerID = c.ContainerID
+    ORDER BY t.Timestamp DESC
+  `;
+
+  customerDB.all(query, [], (err, rows) => {
+    if (err) return res.status(500).send('Failed to export CSV');
+
+    let csv = 'ItemQR,Stage,Timestamp,Notes,Container\n';
+    rows.forEach(r => {
+      csv += `${r.ItemQR},${r.Stage},${r.Timestamp},"${r.Notes || ''}",${r.ContainerNumber || ''}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="tracking-report.csv"');
+    res.send(csv);
+  });
+});
+
+app.get('/reporting', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'reporting.html'));
+});
+
+app.get('/reports/top-customers', (req, res) => {
+  customerDB.all(`
+    SELECT 
+      c.CustomerID,
+      c.[First Name],
+      c.[Last Name],
+      c.Company,
+      IFNULL(SUM(p.AmountPaid), 0) AS TotalSpent
+    FROM customers c
+    LEFT JOIN invoices i ON c.CustomerID = i.CustomerID
+    LEFT JOIN payments p ON i.InvoiceID = p.InvoiceID
+    GROUP BY c.CustomerID
+    ORDER BY TotalSpent DESC
+    LIMIT 50
+  `, [], (err, rows) => {
+    if (err) {
+      console.error('Error fetching top customers:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    res.json(rows);
+  });
+});
+
+app.get('/reports/referral-summary', (req, res) => {
+  customerDB.all(`
+    SELECT 
+      c.CustomerID,
+      c.[First Name],
+      c.[Last Name],
+      c.Company,
+      COUNT(r.ReferralID) AS TotalReferrals,
+      SUM(r.RewardIssued) AS RewardsGiven,
+      SUM(r.BonusIssued) AS BonusesGiven
+    FROM referrals r
+    JOIN customers c ON c.CustomerID = r.ReferrerID
+    GROUP BY r.ReferrerID
+    ORDER BY TotalReferrals DESC
+    LIMIT 50
+  `, [], (err, rows) => {
+    if (err) {
+      console.error('Error fetching referral summary:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    res.json(rows);
+  });
+});
+
+app.get('/reports/inactive-customers', (req, res) => {
+  customerDB.all(`
+    SELECT 
+      c.CustomerID,
+      c.[First Name],
+      c.[Last Name],
+      c.Company,
+      MAX(b.[Booking Date]) AS LastBooking
+    FROM customers c
+    LEFT JOIN bookings b ON c.CustomerID = b.CustomerID
+    GROUP BY c.CustomerID
+    HAVING LastBooking IS NULL OR DATE(LastBooking) < DATE('now', '-6 months')
+    ORDER BY LastBooking ASC
+  `, [], (err, rows) => {
+    if (err) {
+      console.error('Error fetching inactive customers:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    res.json(rows);
+  });
+});
+
+app.get('/customer-reports', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'customer-reports.html'));
+});
+
+app.get('/reports/staff-logs', (req, res) => {
+  customerDB.all(`
+    SELECT Role, StaffName, COUNT(*) AS JobsAssigned,
+           SUM(CASE WHEN b.Status = 'Collected' THEN 1 ELSE 0 END) AS Completed
+    FROM (
+      SELECT 'Driver' AS Role, DriverName AS StaffName, BookingID FROM job_allocations
+      WHERE DriverName IS NOT NULL AND TRIM(DriverName) != ''
+      UNION ALL
+      SELECT 'Helper1', Helper1Name, BookingID FROM job_allocations
+      WHERE Helper1Name IS NOT NULL AND TRIM(Helper1Name) != ''
+      UNION ALL
+      SELECT 'Helper2', Helper2Name, BookingID FROM job_allocations
+      WHERE Helper2Name IS NOT NULL AND TRIM(Helper2Name) != ''
+      UNION ALL
+      SELECT 'Van', Van, BookingID FROM job_allocations
+      WHERE Van IS NOT NULL AND TRIM(Van) != ''
+    ) AS jobs
+    JOIN bookings b ON b.BookingID = jobs.BookingID
+    GROUP BY Role, StaffName
+    ORDER BY JobsAssigned DESC;
+  `, [], (err, rows) => {
+    if (err) {
+      console.error('Error fetching staff job logs:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    res.json(rows);
+  });
+});
+
+app.get('/reports/staff-allocation-summary', (req, res) => {
+  customerDB.all(`
+    SELECT Role, StaffName, COUNT(*) AS Allocated,
+           SUM(CASE WHEN b.Status = 'Collected' THEN 1 ELSE 0 END) AS Completed
+    FROM (
+      SELECT 'Driver' AS Role, DriverName AS StaffName, BookingID FROM job_allocations
+      WHERE DriverName IS NOT NULL AND TRIM(DriverName) != ''
+      UNION ALL
+      SELECT 'Helper1', Helper1Name, BookingID FROM job_allocations
+      WHERE Helper1Name IS NOT NULL AND TRIM(Helper1Name) != ''
+      UNION ALL
+      SELECT 'Helper2', Helper2Name, BookingID FROM job_allocations
+      WHERE Helper2Name IS NOT NULL AND TRIM(Helper2Name) != ''
+      UNION ALL
+      SELECT 'Van', Van, BookingID FROM job_allocations
+      WHERE Van IS NOT NULL AND TRIM(Van) != ''
+    ) assignments
+    JOIN bookings b ON b.BookingID = assignments.BookingID
+    GROUP BY Role, StaffName
+    ORDER BY Allocated DESC
+  `, [], (err, rows) => {
+    if (err) {
+      console.error('Error fetching staff allocation summary:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    res.json(rows);
+  });
+});
+
+app.get('/reports/staff-performance', (req, res) => {
+  customerDB.all(`
+    SELECT
+      Role,
+      StaffName,
+      Date,
+      COUNT(*) AS Jobs,
+      SUM(CASE WHEN b.Status = 'Collected' THEN 1 ELSE 0 END) AS Completed
+    FROM (
+      SELECT 
+        'Driver' AS Role,
+        ja.DriverName AS StaffName,
+        DATE(ja.AllocatedAt) AS Date,
+        ja.BookingID
+      FROM job_allocations ja
+      WHERE ja.DriverName IS NOT NULL AND TRIM(ja.DriverName) != ''
+
+      UNION ALL
+
+      SELECT 
+        'Helper1',
+        ja.Helper1Name,
+        DATE(ja.AllocatedAt),
+        ja.BookingID
+      FROM job_allocations ja
+      WHERE ja.Helper1Name IS NOT NULL AND TRIM(ja.Helper1Name) != ''
+
+      UNION ALL
+
+      SELECT 
+        'Helper2',
+        ja.Helper2Name,
+        DATE(ja.AllocatedAt),
+        ja.BookingID
+      FROM job_allocations ja
+      WHERE ja.Helper2Name IS NOT NULL AND TRIM(ja.Helper2Name) != ''
+
+      UNION ALL
+
+      SELECT 
+        'Van',
+        ja.Van,
+        DATE(ja.AllocatedAt),
+        ja.BookingID
+      FROM job_allocations ja
+      WHERE ja.Van IS NOT NULL AND TRIM(ja.Van) != ''
+    ) AS assignments
+    JOIN bookings b ON b.BookingID = assignments.BookingID
+    GROUP BY Role, StaffName, Date
+    ORDER BY Date DESC, Jobs DESC;
+  `, [], (err, rows) => {
+    if (err) {
+      console.error('Error fetching staff performance:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    res.json(rows);
+  });
+});
+
+app.get('/reports/feedback-summary', (req, res) => {
+  customerDB.all(`
+    SELECT 
+      QueryType,
+      Status,
+      COUNT(*) AS Count
+    FROM feedback
+    GROUP BY QueryType, Status
+    ORDER BY QueryType, Status
+  `, [], (err, rows) => {
+    if (err) {
+      console.error('Error fetching feedback summary:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    res.json(rows);
+  });
+});
+
+app.get('/api/feedback/filter', (req, res) => {
+  const { type, status, start, end, invoiceId } = req.query;
+  const conditions = [];
+  const params = [];
+
+  if (type) {
+    conditions.push(`QueryType = ?`);
+    params.push(type);
+  }
+
+  if (status) {
+    conditions.push(`Status = ?`);
+    params.push(status);
+  }
+
+  if (start) {
+    conditions.push(`DATE(CreatedAt) >= DATE(?)`);
+    params.push(start);
+  }
+
+  if (end) {
+    conditions.push(`DATE(CreatedAt) <= DATE(?)`);
+    params.push(end);
+  }
+
+  if (invoiceId) {
+    conditions.push(`InvoiceID = ?`);
+    params.push(invoiceId);
+  }
+
+  const sql = `
+    SELECT f.*, c.[First Name] AS FirstName, c.[Last Name] AS LastName
+    FROM feedback f
+    LEFT JOIN customers c ON c.CustomerID = f.CustomerID
+    ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
+    ORDER BY f.CreatedAt DESC
+  `;
+
+  customerDB.all(sql, params, (err, rows) => {
+    if (err) {
+      console.error('❌ Feedback filter error:', err);
+      return res.status(500).json({ error: 'Failed to fetch filtered feedback' });
+    }
+    res.json(rows);
+  });
+});
+
+app.get('/feedback-list', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'feedback-list.html'));
+});
+
+app.get('/feedback-dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'feedback-dashboard.html'));
+});
+
+app.get('/staff-reports', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'staff-reports.html'));
+});

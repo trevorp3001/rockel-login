@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Edit Invoice | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+    <h2 class="text-2xl font-bold mb-4" id="invoiceHeading">Edit Invoice</h2>
+
+    <form id="editInvoiceForm" method="POST">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input name="ReceiverName" placeholder="Receiver Name" class="p-2 border rounded" />
+        <input name="Email" placeholder="Email" class="p-2 border rounded" />
+        <input name="Phone1" placeholder="Phone 1" class="p-2 border rounded" />
+        <input name="Phone2" placeholder="Phone 2" class="p-2 border rounded" />
+        <input name="Phone3" placeholder="Phone 3" class="p-2 border rounded" />
+        <input name="Address1" placeholder="Address 1" class="p-2 border rounded" />
+        <input name="Address2" placeholder="Address 2" class="p-2 border rounded" />
+        <input name="PostCode" placeholder="Post Code" class="p-2 border rounded" />
+        <input name="Country" placeholder="Country" class="p-2 border rounded" />
+      </div>
+      <textarea name="Notes" placeholder="Notes" class="w-full p-2 border rounded mt-2"></textarea>
+
+      <button type="submit" class="bg-blue-700 text-white px-6 py-2 rounded mt-4">Save Changes</button>
+      <a href="/invoices-list" class="ml-4 text-blue-700 hover:underline">← Back to Invoices</a>
+    </form>
+  </div>
+
+  <script>
+  const invoiceId = new URLSearchParams(window.location.search).get('id');
+  const form = document.getElementById('editInvoiceForm');
+  const heading = document.getElementById('invoiceHeading');
+
+  let actionToken = null;
+
+  async function fetchActionToken() {
+    try {
+      const res = await fetch('/api/get-action-token', { credentials: 'include' });
+      if (!res.ok) {
+        console.error('Failed to fetch action token');
+        return;
+      }
+      const data = await res.json();
+      actionToken = data.actionToken;
+    } catch (err) {
+      console.error('Error getting action token', err);
+    }
+  }
+
+  async function loadInvoice() {
+    if (!invoiceId) {
+      Toastify({
+        text: "Missing invoice ID in URL",
+        backgroundColor: "red",
+        duration: 4000
+      }).showToast();
+      return;
+    }
+
+    try {
+      const res = await fetch(`/invoices/single/${invoiceId}`);
+      if (!res.ok) {
+        Toastify({
+          text: "Failed to load invoice details",
+          backgroundColor: "red",
+          duration: 4000
+        }).showToast();
+        return;
+      }
+
+      const data = await res.json();
+      const invoice = data.invoice || data;   // fallback just in case
+
+      // Fill form fields we actually have on this page
+      const fields = [
+        'ReceiverName',
+        'Email',
+        'Phone1',
+        'Phone2',
+        'Phone3',
+        'Address1',
+        'Address2',
+        'PostCode',
+        'Country',
+        'Notes'
+      ];
+
+      fields.forEach(name => {
+        const input = form.querySelector(`[name="${name}"]`);
+        if (input) {
+          input.value = invoice[name] || '';
+        }
+      });
+
+      // Set heading nicely
+      heading.textContent = `Edit Invoice ${invoice.InvoiceNumber || invoiceId} – ${invoice.ReceiverName || ''}`;
+
+      // Set form action
+      form.action = `/invoices/update/${invoiceId}`;
+      console.log('Form will submit to:', form.action);
+
+    } catch (err) {
+      console.error('Error loading invoice:', err);
+      Toastify({
+        text: "Error loading invoice details",
+        backgroundColor: "red",
+        duration: 4000
+      }).showToast();
+    }
+  }
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+
+    try {
+      // Ensure we have a token
+      if (!actionToken) {
+        await fetchActionToken();
+      }
+
+      const body = new URLSearchParams(new FormData(form)).toString();
+
+      const res = await fetch(form.action, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Action-Token': actionToken || ''
+        },
+        body
+      });
+
+      if (res.ok) {
+        Toastify({
+          text: "Invoice updated ✅",
+          backgroundColor: "green",
+          duration: 3000
+        }).showToast();
+      } else {
+        let msg = 'Update failed';
+        try {
+          const err = await res.json();
+          if (err && err.error) msg = err.error;
+        } catch (_) {}
+        Toastify({
+          text: `❌ ${msg}`,
+          backgroundColor: "red",
+          duration: 4000
+        }).showToast();
+      }
+    } catch (err) {
+      console.error('Update error:', err);
+      Toastify({
+        text: "Network or server error",
+        backgroundColor: "red",
+        duration: 4000
+      }).showToast();
+    }
+  });
+
+  // Init on page load
+  document.addEventListener('DOMContentLoaded', async () => {
+    await fetchActionToken();
+    await loadInvoice();
+  });
+</script>
+</body>
+</html>

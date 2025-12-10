@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scan or Enter Item</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  
+  <div id="toast" class="fixed top-4 right-4 hidden px-4 py-2 text-white rounded shadow z-50"></div>
+
+  <h1 class="text-2xl font-bold mb-4">Confirm Status: <span id="statusLabel"></span></h1>
+
+  <div class="bg-white rounded shadow p-4 mb-6 max-w-xl">
+    <label class="block font-semibold mb-1">Scan QR code or Enter Item QR:</label>
+    <input id="qrInput" type="text" placeholder="Scan or type item QR" class="w-full border p-2 rounded mb-4" />
+    <button onclick="startCameraScan()" class="bg-gray-700 text-white px-3 py-1 rounded mb-2">📷 Scan with Camera</button>
+    <div id="reader" class="mb-4" style="width: 300px;"></div>
+
+    <label class="block font-semibold mb-1">Or search by Invoice Number:</label>
+    <input id="invoiceInput" type="text" placeholder="Enter invoice number" class="w-full border p-2 rounded mb-4" />
+
+    <div id="containerSelector" class="mb-4 hidden">
+      <label class="block font-semibold mb-1">Select Container for Shipping:</label>
+      <select id="containerDropdown" class="w-full border p-2 rounded"></select>
+    </div>
+
+    <button onclick="lookupCode()" class="bg-blue-600 text-white px-4 py-2 rounded mr-2">Lookup</button>
+    <a href="/status-selection" class="text-blue-600 underline ml-4">&larr; Back to Status List</a>
+  </div>
+
+  <div id="results" class="max-w-4xl"></div>
+
+  <script>
+    let ACTION_TOKEN = null;
+
+  async function fetchActionToken() {
+    try {
+      const res = await fetch('/api/get-action-token');
+      if (!res.ok) throw new Error('Failed to fetch action token');
+      const data = await res.json();
+      ACTION_TOKEN = data.actionToken;
+    } catch (err) {
+      console.error('❌ Failed to load action token:', err);
+      showToast('Security token error – please refresh the page', false);
+    }
+  }
+
+  // fetch token on load
+  window.addEventListener('load', () => {
+    fetchActionToken();
+  });
+
+    const params = new URLSearchParams(window.location.search);
+    const stage = params.get("stage") || "Unknown";
+    document.getElementById("statusLabel").textContent = stage;
+
+    const containerSelector = document.getElementById("containerSelector");
+    const containerDropdown = document.getElementById("containerDropdown");
+
+    function startCameraScan() {
+      const qrScanner = new Html5Qrcode("reader");
+      qrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        qrCodeMessage => {
+          document.getElementById('qrInput').value = qrCodeMessage;
+          qrScanner.stop();
+          document.getElementById('reader').innerHTML = '';
+          lookupCode();
+        },
+        errorMessage => {
+          // ignore scan errors
+        }
+      ).catch(err => {
+        console.error("Camera init failed:", err);
+      });
+    }
+
+    if (stage === 'Shipped') {
+      containerSelector.classList.remove('hidden');
+      fetch('/containers/eligible')
+        .then(res => res.json())
+        .then(data => {
+          containerDropdown.innerHTML = '';
+          data.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.ContainerID;
+            opt.textContent = `${c.ContainerID} - ${c.ContainerNumber || 'N/A'} - ${c.Vessel || ''}`;
+            containerDropdown.appendChild(opt);
+          });
+        });
+    }
+
+    function showToast(message, isSuccess = true) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `fixed top-4 right-4 px-4 py-2 rounded shadow z-50 ${isSuccess ? 'bg-green-600' : 'bg-red-600'} text-white`;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+
+    async function lookupCode() {
+      let qr = document.getElementById('qrInput').value.trim();
+      const invoice = document.getElementById('invoiceInput').value.trim();
+
+      if (qr.includes('itemId=')) {
+        try {
+          const url = new URL(qr);
+          const id = url.searchParams.get('itemId');
+          if (id) qr = id;
+        } catch (e) {
+          console.warn('Invalid QR format', qr);
+        }
+      }
+
+      const res = await fetch(`/api/track-lookup?qr=${qr}&invoice=${invoice}`);
+      const data = await res.json();
+
+      const div = document.getElementById('results');
+      if (!data || data.length === 0) {
+        div.innerHTML = '<p class="text-red-600">No matching items found.</p>';
+        return;
+      }
+
+      let html = '';
+      if (data.length > 1) {
+        html += `<div class="mb-4 text-right">
+          <button onclick="confirmAll()" class="bg-blue-700 text-white px-4 py-2 rounded">Confirm All</button>
+        </div>`;
+      }
+
+      html += `
+        <table class="min-w-full bg-white shadow rounded text-sm">
+        <thead class="bg-gray-200">
+          <tr data-item-id="{{ItemID}}">
+            <th class="text-left p-3">Item</th>
+            <th class="text-left p-3">Invoice</th>
+            <th class="text-left p-3">Qty</th>
+            <th class="text-left p-3">Unit £</th>
+            <th class="text-left p-3">Total £</th>
+            <th class="text-left p-3">Status</th>
+            <th class="text-left p-3">QR</th>
+            <th class="text-left p-3">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(item => {
+            const statusColor = item.InvoiceStatus === 'Paid' ? 'bg-green-600' :
+                                item.InvoiceStatus === 'Partial' ? 'bg-yellow-500' : 'bg-red-600';
+            return `
+              <tr class="border-t">
+                <td class="p-3">${item.ItemName}</td>
+                <td class="p-3">${item.InvoiceNumber}</td>
+                <td class="p-3">${item.Quantity || 1}</td>
+                <td class="p-3">£${parseFloat(item.UnitCost || 0).toFixed(2)}</td>
+                <td class="p-3">£${parseFloat((item.UnitCost || 0) * (item.Quantity || 1)).toFixed(2)}</td>
+                <td class="p-3 text-white font-semibold ${statusColor}">${item.InvoiceStatus || ''}</td>
+                <td class="p-3">${item.ItemQR}</td>
+                <td class="p-2">
+                  <button class="bg-green-600 text-white px-3 py-1 rounded" onclick="confirmStatus(${item.ItemID})">Confirm</button>
+                  <button class="bg-yellow-600 text-white px-3 py-1 rounded ml-2" onclick="toggleNote(${item.ItemID})">Confirm with Note</button>
+                  <div id="noteBox-${item.ItemID}" class="mt-2 hidden">
+                    <textarea id="noteInput-${item.ItemID}" class="w-full border p-1 mt-1" placeholder="Enter note here..."></textarea>
+                    <button class="bg-blue-600 text-white px-2 py-1 mt-1 rounded" onclick="confirmStatus(${item.ItemID}, true)">Submit Note</button>
+                  </div>
+                </td>
+
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>`;
+
+      div.innerHTML = html;
+    }
+
+    function toggleNote(itemId) {
+      const box = document.getElementById(`noteBox-${itemId}`);
+      if (box) box.classList.toggle('hidden');
+    }
+
+
+    async function confirmStatus(itemId, withNote = false) {
+      const payload = { Stage: stage };  // Or stageSelect?.value depending on file
+      if (stage === 'Shipped') {
+        payload.ContainerID = document.getElementById('containerDropdown')?.value;
+      }
+
+      if (withNote) {
+        const noteEl = document.getElementById(`noteInput-${itemId}`);
+        if (noteEl) {
+          const note = noteEl.value.trim();
+          if (note) payload.Notes = note;
+        }
+      }
+
+      const res = await fetch(`/api/track-item/${itemId}`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Action-Token': ACTION_TOKEN || ''
+  },
+  body: JSON.stringify(payload)
+});
+
+
+      const result = await res.json();
+      if (res.ok) {
+        showToast(result.message || '✅ Status updated!');
+        const row = document.querySelector(`button[onclick="confirmStatus(${itemId})"]`)?.closest('tr');
+        if (row) row.remove();
+      } else {
+        showToast(result.message || '❌ Failed to update status', false);
+      }
+    }
+
+
+    async function confirmAll() {
+      const rows = document.querySelectorAll('#results table tbody tr');
+      for (const row of rows) {
+        const button = row.querySelector('button');
+        if (!button) continue;
+
+        const itemId = button.getAttribute('onclick').match(/\d+/)?.[0];
+        if (!itemId) continue;
+
+        const payload = { Stage: stage };
+        if (stage === 'Shipped') {
+          payload.ContainerID = document.getElementById('containerDropdown')?.value;
+        }
+
+        // Warn if shipping unpaid item
+        const row = document.querySelector(`button[onclick="confirmStatus(${itemId})"]`)?.closest('tr');
+        const statusCell = row?.querySelector('td:nth-child(6)');
+        const status = statusCell?.textContent?.trim();
+        if (stage === 'Shipped' && status !== 'Paid') {
+          const confirmed = confirm(`⚠ This invoice is marked as ${status}. Are you sure you want to mark this item as shipped?`);
+          if (!confirmed) continue;
+        }
+
+
+
+        const res = await fetch(`/api/track-item/${itemId}`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Action-Token': ACTION_TOKEN || ''
+  },
+  body: JSON.stringify(payload)
+});
+
+
+        if (res.ok) {
+          showToast(`✅ Item ${itemId} confirmed`);
+          row.remove();
+        } else {
+          showToast(`❌ Item ${itemId} failed`, false);
+        }
+      }
+    }
+  </script>
+</body>
+</html>

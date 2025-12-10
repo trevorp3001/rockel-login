@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Select Tracking Status</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6 font-sans">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  <h1 class="text-2xl font-bold mb-6">Select Tracking Status</h1>
+
+  <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 max-w-4xl">
+    <a href="/scan-status?stage=Picked%20up" class="block bg-blue-600 text-white px-6 py-4 rounded shadow hover:bg-blue-700 text-center">Picked up</a>
+    <a href="/scan-status?stage=Received%20(London)" class="block bg-blue-600 text-white px-6 py-4 rounded shadow hover:bg-blue-700 text-center">Received (London)</a>
+    <a href="/scan-status?stage=Shipped" class="block bg-blue-600 text-white px-6 py-4 rounded shadow hover:bg-blue-700 text-center">Shipped (Select Container)</a>
+    <a href="/scan-status?stage=Arrived%20(Freetown)" class="block bg-blue-600 text-white px-6 py-4 rounded shadow hover:bg-blue-700 text-center">Arrived (Freetown)</a>
+    <a href="/scan-status?stage=Collected%20(Customer)" class="block bg-blue-600 text-white px-6 py-4 rounded shadow hover:bg-blue-700 text-center">Collected (Customer)</a>
+    <a href="/scan-status?stage=Delivered" class="block bg-blue-600 text-white px-6 py-4 rounded shadow hover:bg-blue-700 text-center">Delivered</a>
+  </div>
+
+  <div class="mt-8">
+    <a href="/dashboard" class="text-blue-600 underline">&larr; Back to Dashboard</a>
+  </div>
+</body>
+</html>

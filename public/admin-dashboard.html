@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topnav">
+    <h1>Rockel Shipping – Admin Dashboard</h1>
+    <nav>
+      <a href="/staff/admin-dashboard.html">Dashboard</a>
+      <a href="/staff/manage-staff.html">Manage Staff</a>
+      <a href="/reports/audit">Audit Logs</a>
+      <a href="#">Settings</a>
+      <a href="/staff/logout">Logout</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <h2>Welcome, Admin!</h2>
+    <p>You now have full access to manage staff, settings, and reports.</p>
+
+    <section style="margin-top:20px;">
+      <h3>Quick Links</h3>
+      <ul>
+        <li><a href="manage-staff.html">👤 Manage Staff</a></li>
+        <li><a href="#">⚙️ Company Settings</a></li>
+        <li><a href="#">📊 Reports</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+<script>
+async function checkAuth() {
+  const res = await fetch('/session-check', { credentials: 'include' });
+  const data = await res.json();
+  if (!data.loggedIn || data.role !== "Admin") {
+    window.location.href = '/staff-login.html';
+  }
+}
+checkAuth();
+</script>
+</html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Reports | Rockel Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6">
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 flex flex-wrap justify-between items-center">
+    <a href="/dashboard" class="text-xl font-bold">Rockel Shipping</a>
+    <nav class="flex flex-wrap items-center space-x-4">
+      <a href="/dashboard" class="underline">Customer</a>
+      <a href="/job-list">Bookings</a>
+      <a href="/invoices-list" class="hover:underline">Invoices</a>
+      <a href="/containers-list" class="hover:underline">Containers</a>
+      <a href="/feedback-list" class="hover:underline">Feedback List</a>
+      <form action="/logout" method="GET">
+        <button class="ml-4 bg-red-600 text-white px-3 py-1 rounded">Logout</button>
+      </form>
+    </nav>
+  </header>
+  <div class="max-w-7xl mx-auto bg-white p-6 rounded shadow">
+    <h1 class="text-3xl font-bold mb-6">🚚 Staff Reports</h1>
+
+    <div class="mb-4">
+      <button onclick="showTab('jobLogs')" class="tab-btn bg-blue-600 text-white px-4 py-2 rounded mr-2">Job Logs</button>
+      <button onclick="showTab('allocatedVsCompleted')" class="tab-btn bg-blue-600 text-white px-4 py-2 rounded mr-2">Allocated vs Completed</button>
+      <button onclick="showTab('staffPerformance')" class="tab-btn bg-blue-600 text-white px-4 py-2 rounded">Performance</button>
+    </div>
+
+    <div id="jobLogs" class="report-tab">
+      <h2 class="text-xl font-semibold mb-2">Staff Job Logs</h2>
+      <button onclick="downloadCSV('jobLogsTable')" class="mb-2 bg-green-600 text-white px-3 py-1 rounded">Download CSV</button>
+      <table id="jobLogsTable" class="min-w-full text-sm border">
+        <thead class="bg-gray-200">
+            <tr>
+                <th class="p-2">Staff Name</th>
+                <th>Role</th>
+                <th>Jobs</th>
+                <th>Completed</th>
+            </tr>
+            </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="allocatedVsCompleted" class="report-tab hidden">
+      <h2 class="text-xl font-semibold mb-2">Allocated vs Completed Jobs</h2>
+      <button onclick="downloadCSV('allocatedCompletedTable')" class="mb-2 bg-green-600 text-white px-3 py-1 rounded">Download CSV</button>
+      <table id="allocatedCompletedTable" class="min-w-full text-sm border">
+        <thead class="bg-gray-200">
+          <tr><th class="p-2">Staff Name</th><th>Role</th><th>Allocated</th><th>Completed</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="staffPerformance" class="report-tab hidden">
+      <h2 class="text-xl font-semibold mb-2">Staff Performance (Jobs/Day)</h2>
+      <button onclick="downloadCSV('staffPerformanceTable')" class="mb-2 bg-green-600 text-white px-3 py-1 rounded">Download CSV</button>
+      <table id="staffPerformanceTable" class="min-w-full text-sm border">
+        <thead class="bg-gray-200">
+        <tr>
+            <th class="p-2">Staff Name</th>
+            <th>Role</th>
+            <th>Date</th>
+            <th>Jobs</th>
+            <th>Completed</th> <!-- ✅ ADD THIS -->
+        </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+async function loadStaffLogs() {
+  const res = await fetch('/api/reports/staff-logs');
+  const data = await res.json();
+
+  const tbody = document.querySelector('#jobLogsTable tbody');
+  tbody.innerHTML = '';
+  data.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${s.Name}</td>
+      <td>${s.Role}</td>
+      <td>${s.BookingID}</td>
+      <td>${s.AllocatedAt}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function loadStaffAllocationSummary() {
+  const res = await fetch('/api/reports/staff-allocation-summary');
+  const data = await res.json();
+
+  const tbody = document.querySelector('#allocatedCompletedTable tbody');
+  tbody.innerHTML = '';
+  data.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${s.Name}</td>
+      <td>${s.Role || ''}</td>
+      <td>${s.AllocatedJobs}</td>
+      <td>${s.CompletedJobs}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function loadStaffPerformance() {
+  const res = await fetch('/api/reports/staff-performance');
+  const data = await res.json();
+
+  const tbody = document.querySelector('#staffPerformanceTable tbody');
+  tbody.innerHTML = '';
+  data.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${s.Name}</td>
+      <td>${s.Role || ''}</td>
+      <td>${s.JobsPerDay ? s.JobsPerDay.toFixed(2) : 0}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+loadStaffLogs();
+loadStaffAllocationSummary();
+loadStaffPerformance();
+</script>
+</body>
+</html>

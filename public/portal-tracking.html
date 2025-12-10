@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rockel Shipping - Tracking</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .progress-container {
+      display: flex;
+      justify-content: space-between;
+      margin: 20px 0;
+      position: relative;
+    }
+    .progress-step {
+      flex: 1;
+      text-align: center;
+      position: relative;
+    }
+    .progress-step::before {
+      content: '';
+      display: block;
+      margin: 0 auto 10px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ccc;
+    }
+    .progress-step.active::before {
+      background: green;
+    }
+    .progress-bar {
+      position: absolute;
+      top: 10px;
+      left: 10%;
+      width: 80%;
+      height: 4px;
+      background: #ccc;
+      z-index: -1;
+    }
+    .progress-fill {
+      height: 100%;
+      background: green;
+      width: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header class="portal-header">
+  <a href="https://www.rockelshippingcompany.com" target="_blank" class="logo-link">
+    <img src="images/rockellogo.png" alt="Rockel Shipping Logo" class="logo">
+  </a>
+  <h2>Customer Portal</h2>
+</header>
+
+<ul>
+  <li><a href="https://www.rockelshippingcompany.com">Go back to RockelShippingCompany.com</a></li>
+  <li><a href="/portal/logout">Logout</a></li>
+</ul>
+
+
+  <div class="tracking-container">
+    <h1>Tracking</h1>
+
+    <div id="progress" class="progress-container"></div>
+    <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+
+    <table id="itemsTable">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Description</th>
+          <th>Quantity</th>
+          <th>Latest Stage</th>
+          <th>Last Update</th>
+        </tr>
+      </thead>
+      <tbody id="itemsBody"></tbody>
+    </table>
+
+    <p id="error" style="color:red; display:none;"></p>
+    <button onclick="backToInvoices()">Back to Invoices</button>
+  </div>
+
+  <script>
+(function () {
+  const invoiceId = localStorage.getItem('invoiceId');
+  if (!invoiceId) {
+    window.location.href = '/portal-invoices.html';
+    return;
+  }
+
+  const progressEl    = document.querySelector('.progress-container');
+  const progressBarEl = document.querySelector('.progress-bar');
+  const itemsTableEl  = document.getElementById('itemsTable');
+  const errorEl       = document.getElementById('error');
+
+  function payInvoice(id) {
+    alert(`Payment flow coming soon for Invoice ID: ${id}`);
+  }
+
+  function blockWithPayment(statusText) {
+    if (progressEl)    progressEl.style.display = 'none';
+    if (progressBarEl) progressBarEl.style.display = 'none';
+    if (itemsTableEl)  itemsTableEl.style.display = 'none';
+    errorEl.style.display = 'block';
+    errorEl.innerHTML = `
+      <strong>Tracking is unavailable (${statusText || 'Unpaid'}).</strong><br>
+      Please complete payment to unlock tracking.<br><br>
+      <div style="background:#f8f9fa; padding:10px; border-radius:6px; margin-bottom:10px;">
+        Bank: Rockel Bank Ltd<br>
+        Sort Code: 12-34-56<br>
+        Account: 12345678
+      </div>
+      <button class="pay-btn" onclick="goToPay(${invoiceId})">Pay Now</button>
+    `;
+  }
+
+  function renderProgress(steps, currentIndex) {
+    const container = document.getElementById('progress');
+    const fill = document.getElementById('progressFill');
+    container.innerHTML = '';
+    (steps || []).forEach((step, index) => {
+      const div = document.createElement('div');
+      div.className = 'progress-step' + (index <= currentIndex ? ' active' : '');
+      div.innerText = step;
+      container.appendChild(div);
+    });
+    const percent = steps && steps.length > 1 ? (currentIndex / (steps.length - 1)) * 100 : 0;
+    fill.style.width = percent + '%';
+  }
+
+  function renderItems(items) {
+    const tbody = document.getElementById('itemsBody');
+    tbody.innerHTML = '';
+    (items || []).forEach(it => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${it.ItemName || ''}</td>
+        <td>${it.Description || ''}</td>
+        <td>${it.Quantity ?? ''}</td>
+        <td>${it.LatestStage || 'Not started'}</td>
+        <td>${it.LastUpdate ? new Date(it.LastUpdate).toLocaleString() : ''}</td>
+      `;
+      tbody.appendChild(row);
+    });
+  }
+
+  async function getInvoiceStatusFromList() {
+    const customerId = localStorage.getItem('customerId');
+    if (!customerId) return null;
+    try {
+      const r = await fetch(`/api/portal/${customerId}/invoices`);
+      const list = await r.json();
+      const inv = Array.isArray(list) ? list.find(i => String(i.InvoiceID) === String(invoiceId)) : null;
+      return inv ? inv.status : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function loadTracking() {
+    try {
+      const res = await fetch(`/api/portal/invoice/${invoiceId}/tracking`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load tracking');
+
+      // Prefer backend status (A)
+      if (data.status && data.status !== 'Paid') {
+        blockWithPayment(data.status);
+        return;
+      }
+
+      // Fallback: derive status from invoice list (B)
+      if (!data.status) {
+        const derived = await getInvoiceStatusFromList();
+        if (derived && derived !== 'Paid') {
+          blockWithPayment(derived);
+          return;
+        }
+      }
+
+      // Render tracking
+      if (data.summary && Array.isArray(data.summary.steps) && typeof data.summary.current === 'number') {
+        renderProgress(data.summary.steps, data.summary.current);
+      } else {
+        // No summary from backend — show items only
+        if (progressEl)    progressEl.style.display = 'none';
+        if (progressBarEl) progressBarEl.style.display = 'none';
+      }
+      renderItems(data.items || []);
+    } catch (err) {
+      console.error('Tracking error:', err);
+      errorEl.style.display = 'block';
+      errorEl.innerText = err.message || 'Network error, please try again.';
+    }
+  }
+
+  // Expose back button globally (used by onclick in HTML)
+  window.backToInvoices = function () {
+    window.location.href = '/portal-invoices.html';
+  };
+
+  loadTracking();
+})();
+
+function goToPay(invoiceId) {
+  localStorage.setItem('invoiceId', invoiceId);
+  window.location.href = '/portal-pay.html';
+}
+
+</script>
+
+</body>
+</html>

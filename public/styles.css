@@ -1,0 +1,189 @@
+/* Header Banner */
+.portal-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 30px;
+  padding: 15px;
+  background: #003366;
+  border-radius: 10px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+  color: white;
+}
+
+.portal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.portal-header .logo {
+  height: 45px;
+  width: auto;
+  display: block;
+}
+
+.portal-header .logo-link {
+  display: flex;
+  align-items: center;
+}
+
+/* Status chips */
+.chip {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #fff;
+}
+.chip-green { background: #28a745; }
+.chip-yellow { background: #ffc107; color: #000; }
+.chip-red { background: #dc3545; }
+
+/* Pay Now button */
+.pay-btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  margin-top: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s ease;
+}
+.pay-btn:hover {
+  background: #0056b3;
+}
+
+/* Base reset */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Layout container */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 15px;
+}
+
+/* Top navigation */
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  background: #004080; /* dark blue */
+  color: #fff;
+  padding: 10px 15px;
+}
+
+nav a {
+  color: #fff;
+  text-decoration: none;
+  margin: 5px 10px;
+  font-weight: 500;
+}
+
+nav a:hover {
+  text-decoration: underline;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+table th, table td {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  text-align: left;
+  font-size: 0.95rem;
+}
+
+/* Responsive table wrapper */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Forms */
+form {
+  display: grid;
+  gap: 10px;
+}
+
+input, select, textarea, button {
+  width: 100%;
+  padding: 10px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+button {
+  background: #004080;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+}
+
+button:hover {
+  background: #0066cc;
+}
+
+/* Responsive rules */
+@media (max-width: 768px) {
+  nav {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  nav a {
+    margin: 5px 0;
+  }
+
+  table th, table td {
+    font-size: 0.85rem;
+    padding: 6px 8px;
+  }
+
+  button {
+    font-size: 0.9rem;
+    padding: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  nav {
+    padding: 8px;
+  }
+
+  nav a {
+    font-size: 0.9rem;
+  }
+
+  input, select, textarea {
+    font-size: 0.9rem;
+    padding: 8px;
+  }
+}
+
+.form-responsive {
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 480px) {
+  .login-container {
+    padding: 10px;
+  }
+}
