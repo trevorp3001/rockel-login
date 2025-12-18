@@ -19,8 +19,18 @@ const router = express.Router();
 
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
-const dbPath = path.join(__dirname, 'customers.db');
-const customerDB = new sqlite3.Database(dbPath);
+
+// ✅ Use the same /data/customers.db as server.js
+const DATA_DIR = path.join(__dirname, 'data');
+const customersDBPath = path.join(DATA_DIR, 'customers.db');
+const customerDB = new sqlite3.Database(customersDBPath, (err) => {
+  if (err) {
+    console.error('❌ Error opening DB for customer portal:', err);
+  } else {
+    console.log('✅ Customer portal DB connected:', customersDBPath);
+  }
+});
+
 
 // ✅ Import unified authentication middleware
 const { requireAuth } = require('./auth_middleware');

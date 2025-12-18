@@ -1,17 +1,20 @@
 const express = require('express');
 const router = express.Router();
+
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 // ✅ Import unified authentication middleware
 const { requireAuth } = require('./auth_middleware');
 
-// Connect to database
-const dbPath = path.join(__dirname, 'customers.db');
-const customerDB = new sqlite3.Database(dbPath, (err) => {
-  if (err) console.error('Error opening DB for reports:', err);
-  else console.log('✅ Reports DB connected:', dbPath);
+// ✅ Use /data/customers.db
+const DATA_DIR = path.join(__dirname, 'data');
+const customersDBPath = path.join(DATA_DIR, 'customers.db');
+const customerDB = new sqlite3.Database(customersDBPath, (err) => {
+  if (err) console.error('❌ Error opening DB for reports:', err);
+  else console.log('✅ Reports DB connected:', customersDBPath);
 });
+
 
 /* -------------------------
    FINANCE REPORTS

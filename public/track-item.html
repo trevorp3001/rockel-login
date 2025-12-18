@@ -181,7 +181,7 @@ let editingTrackingId = null;
     });
   
     async function loadContainers() {
-      const res = await fetch('/containers/eligible');
+      const res = await fetch('/eligible-containers');
       const containers = await res.json();
       const dropdown = document.getElementById('ContainerID');
       containers.forEach(c => {
@@ -226,7 +226,7 @@ let editingTrackingId = null;
   if (!confirm("Are you sure you want to delete this tracking entry?")) return;
 
   if (!ACTION_TOKEN) {
-    await loadActionToken();
+    await fetchActionToken();
   }
 
   const res = await fetch(`/track-item/${id}`, {
@@ -271,7 +271,7 @@ let editingTrackingId = null;
   e.preventDefault();
 
   if (!ACTION_TOKEN) {
-    await loadActionToken();
+    await fetchActionToken();
     if (!ACTION_TOKEN) return alert("Security token missing. Refresh the page.");
   }
 
@@ -301,8 +301,10 @@ let editingTrackingId = null;
     toggleExtraFields('');
     loadTrackingHistory();
   } else {
-    alert('Failed to submit tracking');
-  }
+  const text = await res.text();
+  console.error('❌ Failed to submit tracking. Status:', res.status, 'Body:', text);
+  alert(`Failed to submit tracking (${res.status}): ${text || 'Unknown error'}`);
+}
 });
 
   

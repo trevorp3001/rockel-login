@@ -1,6 +1,10 @@
 // Load environment variables from .env
 require('dotenv').config();
 
+const isProd = process.env.NODE_ENV === 'production';
+const PORT = process.env.PORT || 3000;
+const COOKIE_SECURE = process.env.COOKIE_SECURE === 'true';
+
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
@@ -10,19 +14,26 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 
-
-
 const sqlite3 = require('sqlite3').verbose();
-
-
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 
+// 🔹 Data and uploads directories (for deployment-friendly layout)
+const DATA_DIR = path.join(__dirname, 'data');
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+
+// Ensure folders exist
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 const QRCode = require('qrcode');
 const multer = require('multer');
 const sendMail = require('./mailer'); // after other require statements
-console.log("Using database:", path.resolve('customers.db'));
+console.log("Using customers database:", path.join(DATA_DIR, 'customers.db'));
 
 const logoBase64 = fs.readFileSync(path.join(__dirname, 'public/images/rkllogo.png')).toString('base64');
 
@@ -67,7 +78,7 @@ const { requireAuth, requireAdmin, requirePortal, requireStaff } = require('./au
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads');
+    cb(null, UPLOADS_DIR);  // ✅ absolute path to /uploads
   },
   filename: function (req, file, cb) {
     const ext = path.extname(file.originalname);
@@ -107,12 +118,15 @@ const upload = multer({
 
 
 
-const port = 3000;
+// Databases (stored in /data)
+const usersDBPath = path.join(DATA_DIR, 'users.db');
+const customersDBPath = path.join(DATA_DIR, 'customers.db');
 
-// Databases
-const db = new sqlite3.Database('users.db');
-const customerDB = new sqlite3.Database('customers.db');
-console.log('📂 Absolute path to customers.db =', path.resolve('customers.db'));
+const db = new sqlite3.Database(usersDBPath);
+const customerDB = new sqlite3.Database(customersDBPath);
+
+console.log('📂 users.db =', usersDBPath);
+console.log('📂 customers.db =', customersDBPath);
 
 // =========================
 // Audit log table (Wave 3F)
@@ -383,8 +397,6 @@ function getReferralCreditForCustomer(customerId) {
 app.disable('x-powered-by');        // remove Express fingerprint
 app.set('trust proxy', 1);          // needed behind nginx / proxy
 
-const isProd = process.env.NODE_ENV === 'production';
-
 // 🔒 Security headers via Helmet
 app.use(helmet({
   // Your app uses a lot of existing HTML/JS; a strict CSP
@@ -410,14 +422,14 @@ if (isProd) {
 // Main DB / dashboard session
 app.use(session({
   name: 'rkl.sid',
-  secret: process.env.SESSION_SECRET_MAIN || 'dev_main_secret_change_me',
+  secret: process.env.SESSION_SECRET_MAIN || 'c09e14e14621bf45b2fb276d251180c887bd48a4844c3e44b1372463f7ad43a2',
   resave: false,
   saveUninitialized: false,
-  store: new SQLiteStore({ db: 'sessions.sqlite', dir: __dirname }),
+  store: new SQLiteStore({ db: 'sessions.sqlite', dir: DATA_DIR }),
   cookie: {
     httpOnly: true,
     sameSite: 'lax',
-    secure: isProd,                 // only HTTPS in production
+    secure: COOKIE_SECURE,                 // only HTTPS in production
     maxAge: 1000 * 60 * 60 * 8      // 8 hours
   }
 }));
@@ -425,14 +437,14 @@ app.use(session({
 // Customer portal session (only /portal + /api/portal)
 app.use(['/portal', '/api/portal'], session({
   name: 'rkl.portal',
-  secret: process.env.SESSION_SECRET_PORTAL || 'dev_portal_secret_change_me',
+  secret: process.env.SESSION_SECRET_PORTAL || '39f791a5b137cb16207007ed8f394761ae6da7a8b06cd23b3fad66398267dd48',
   resave: false,
   saveUninitialized: false,
-  store: new SQLiteStore({ db: 'sessions.sqlite', dir: __dirname }),
+  store: new SQLiteStore({ db: 'sessions.sqlite', dir: DATA_DIR }),
   cookie: {
     httpOnly: true,
     sameSite: 'lax',                // can tighten later
-    secure: isProd,
+    secure: COOKIE_SECURE,
     maxAge: 1000 * 60 * 60 * 8
   }
 }));
@@ -440,14 +452,14 @@ app.use(['/portal', '/api/portal'], session({
 // Staff/Admin session (only /staff + /api/staff)
 app.use(['/staff', '/api/staff'], session({
   name: 'rkl.staff',
-  secret: process.env.SESSION_SECRET_STAFF || 'dev_staff_secret_change_me',
+  secret: process.env.SESSION_SECRET_STAFF || '4c6fa2c47acf40e02ce6f05ed4a057982439d60ee62b8fa5c677517940663de1',
   resave: false,
   saveUninitialized: false,
-  store: new SQLiteStore({ db: 'sessions.sqlite', dir: __dirname }),
+  store: new SQLiteStore({ db: 'sessions.sqlite', dir: DATA_DIR }),
   cookie: {
     httpOnly: true,
     sameSite: 'lax',                // could become 'strict' if you like
-    secure: isProd,
+    secure: COOKIE_SECURE,
     maxAge: 1000 * 60 * 60 * 4      // shorter for staff, optional
   }
 }));
@@ -495,7 +507,7 @@ app.get('/api/get-action-token', requireAuth, (req, res) => {
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 app.use(express.static('public'));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 
 const feedbackRoutes = require('./feedback_routes');
@@ -923,6 +935,15 @@ app.put('/api/staff-users/:id', requireAdmin, validateActionToken, validateStaff
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    env: process.env.NODE_ENV || 'development',
+    uptime: process.uptime()
+  });
+});
+
 
 // =========================
 // Audit Log API
@@ -3435,7 +3456,7 @@ app.get('/track-item', requireAuth, (req, res) => {
   }
 });
 
-app.put('/track-item/update/:trackingId', requireAuth, validateActionToken, validateTrackingIdParam, validateTrackingUpdate, upload.single('Image'), (req, res) => {
+app.put('/track-item/update/:trackingId', requireAuth, validateActionToken, validateTrackingIdParam, upload.single('Image'), validateTrackingUpdate, (req, res) => {
   const trackingId = req.params.trackingId;
   const { Stage, Timestamp, Notes, ContainerID, SignatureData, Location } = req.body;
 
@@ -3464,7 +3485,7 @@ app.put('/track-item/update/:trackingId', requireAuth, validateActionToken, vali
   if (SignatureData && SignatureData.startsWith('data:image')) {
     const base64Data = SignatureData.replace(/^data:image\/\w+;base64,/, '');
     const signatureFilename = `signature-${Date.now()}.png`;
-    const filePath = path.join(__dirname, 'uploads', signatureFilename);
+    const filePath = path.join(UPLOADS_DIR, signatureFilename);
     try {
       fs.writeFileSync(filePath, base64Data, 'base64');
       fields.push("Signature = ?");
@@ -3564,7 +3585,7 @@ app.get('/track-item/history/:itemId', requireAuth, (req, res) => {
   });
 });
 
-app.post('/track-item/:itemId', requireAuth, validateActionToken, validateItemIdParam, validateTrackingCreate, upload.single('Image'), (req, res) => {
+app.post('/track-item/:itemId', requireAuth, validateActionToken, validateItemIdParam, upload.single('Image'), validateTrackingCreate, (req, res) => {
     const itemId = req.params.itemId;
     const d = req.body;
     const imagePath = req.file ? req.file.filename : null;
@@ -3574,7 +3595,7 @@ app.post('/track-item/:itemId', requireAuth, validateActionToken, validateItemId
     if (d.SignatureData && d.SignatureData.startsWith('data:image')) {
       const base64Data = d.SignatureData.replace(/^data:image\/png;base64,/, '');
       signatureFileName = `signature-${Date.now()}.png`;
-      fs.writeFileSync(path.join(__dirname, 'uploads', signatureFileName), base64Data, 'base64');
+      fs.writeFileSync(path.join(UPLOADS_DIR, signatureFileName), base64Data, 'base64');
     }
   
     customerDB.run(
@@ -4461,9 +4482,8 @@ app.use((err, req, res, next) => {
 
 // Start server
 console.log('Setup complete. Starting server...');
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
 });
 
-console.log('✅ Server started on port 3000');
 

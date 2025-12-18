@@ -1,26 +1,30 @@
 // mailer.js
+require('dotenv').config();
 const nodemailer = require('nodemailer');
 
+// Create transporter using ENV variables
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: process.env.EMAIL_HOST,                  // e.g. smtp.gmail.com
+  port: Number(process.env.EMAIL_PORT) || 465,   // 465 for secure, 587 for TLS
+  secure: process.env.EMAIL_SECURE === 'true',   // convert string to boolean
   auth: {
-    user: 'rockelshippingcompany@gmail.com',
-    pass: 'sqfi qdha uubt pknm' // app password
+    user: process.env.EMAIL_USER,                // your gmail address
+    pass: process.env.EMAIL_PASS                 // your app password
   },
   tls: {
     rejectUnauthorized: false
   }
 });
 
-// ✨ Now accepts optional attachments
+// Send mail with optional attachments
 function sendMail(to, subject, text = '', html = '', attachments = []) {
   const mailOptions = {
-    from: '"Rockel Shipping" <rockelshippingcompany@gmail.com>',
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
     to,
     subject,
     text,
     html,
-    attachments // 📎 array of files { filename, path }
+    attachments
   };
 
   return transporter.sendMail(mailOptions);

@@ -293,7 +293,13 @@ async function fetchActionToken() {
   }
 
   async function loadPresets() {
+  try {
     const res = await fetch('/presets');
+    if (!res.ok) {
+      console.error('Failed to load presets:', await res.text());
+      return; // don't crash the page
+    }
+
     const data = await res.json();
     const select = document.getElementById('presetSelect');
     data.forEach(p => {
@@ -305,7 +311,11 @@ async function fetchActionToken() {
       option.dataset.price = p.DefaultPrice;
       select.appendChild(option);
     });
+  } catch (err) {
+    console.error('Error in loadPresets:', err);
   }
+}
+
 
   document.getElementById('presetSelect').addEventListener('change', e => {
     const selected = e.target.selectedOptions[0];

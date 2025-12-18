@@ -2,10 +2,22 @@
 const express = require('express');
 const router = express.Router();
 const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('customers.db');
+const path = require('path');
 
 // ✅ Import unified authentication middleware
 const { requireAuth } = require('./auth_middleware');
+
+// ✅ Use /data/customers.db
+const DATA_DIR = path.join(__dirname, 'data');
+const customersDBPath = path.join(DATA_DIR, 'customers.db');
+const db = new sqlite3.Database(customersDBPath, (err) => {
+  if (err) {
+    console.error('❌ Error opening DB for tracking:', err);
+  } else {
+    console.log('✅ Tracking DB connected:', customersDBPath);
+  }
+});
+
 
 // ✅ Public: Get all tracking events for a given item QR (portal)
 router.get('/tracking/:itemQR', (req, res) => {

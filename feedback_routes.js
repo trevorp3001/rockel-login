@@ -1,6 +1,7 @@
 // feedback_routes.js
 const express = require('express');
 const router = express.Router();
+
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const multer = require('multer');
@@ -9,11 +10,28 @@ const fs = require('fs');
 // ✅ Import unified authentication middleware
 const { requireAuth } = require('./auth_middleware');
 
-const customerDB = new sqlite3.Database('customers.db');
+// ✅ Shared paths (match server.js)
+const DATA_DIR = path.join(__dirname, 'data');
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+
+// Ensure uploads directory exists
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+// ✅ Use /data/customers.db
+const customersDBPath = path.join(DATA_DIR, 'customers.db');
+const customerDB = new sqlite3.Database(customersDBPath, (err) => {
+  if (err) {
+    console.error('❌ Error opening DB for feedback:', err);
+  } else {
+    console.log('✅ Feedback DB connected:', customersDBPath);
+  }
+});
 
 // File upload setup
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads'),
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
     const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;

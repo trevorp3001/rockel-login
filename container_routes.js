@@ -7,7 +7,14 @@ const { requireAuth } = require('./auth_middleware');
 
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
-const customerDB = new sqlite3.Database(path.join(__dirname, 'customers.db'));
+
+// ✅ Use the same /data/customers.db as server.js
+const DATA_DIR = path.join(__dirname, 'data');
+const customersDBPath = path.join(DATA_DIR, 'customers.db');
+const customerDB = new sqlite3.Database(customersDBPath);
+
+console.log('📂 container_routes using DB:', customersDBPath);
+
 
 /**
  * NOTE ABOUT PATHS

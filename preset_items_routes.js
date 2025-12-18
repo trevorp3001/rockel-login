@@ -1,12 +1,39 @@
-// preset_items_routes.js
 const express = require('express');
 const router = express.Router();
+const path = require('path');                         // ⬅ add this
 const sqlite3 = require('sqlite3').verbose();
 
 // ✅ Import unified authentication middleware
 const { requireAuth } = require('./auth_middleware');
 
-const db = new sqlite3.Database('customers.db');
+// ✅ Use the SAME /data/customers.db as server.js
+const DATA_DIR = path.join(__dirname, 'data');
+const customersDBPath = path.join(DATA_DIR, 'customers.db');
+const db = new sqlite3.Database(customersDBPath);
+
+db.serialize(() => {
+  db.run(
+    `
+    CREATE TABLE IF NOT EXISTS preset_items (
+      PresetID INTEGER PRIMARY KEY AUTOINCREMENT,
+      ItemName TEXT NOT NULL,
+      DefaultDescription TEXT,
+      DefaultPrice REAL NOT NULL
+    )
+    `,
+    (err) => {
+      if (err) {
+        console.error('❌ Error ensuring preset_items table:', err.message);
+      } else {
+        console.log('✅ preset_items table is present.');
+      }
+    }
+  );
+});
+
+
+console.log('📂 preset_items_routes using DB:', customersDBPath);
+
 
 // Get all preset items (staff only)
 router.get('/presets', requireAuth, (req, res) => {
