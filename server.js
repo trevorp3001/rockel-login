@@ -739,24 +739,35 @@ app.post('/api/staff/login', staffLoginLimiter, validateStaffLogin, async (req, 
 
     // 🔐 ADD THIS: regenerate session before setting flags
     req.session.regenerate((regenErr) => {
-      if (regenErr) {
-        console.error('Session regenerate error (staff login):', regenErr);
-        return res.status(500).json({ error: 'Login error, please try again.' });
-      }
+  if (regenErr) {
+    console.error('Session regenerate error (main login):', regenErr);
+    return res.status(500).send('Login error, please try again.');
+  }
 
-      // ✅ STAFF / ADMIN login flags
-      req.session.staffUser = {
-        id: user.UserID,
-        username: user.Username,
-        role: user.Role,
-      };
-      req.session.staffAuthenticated = true;
+  // ✅ MAIN DB login flags
+  req.session.mainUser = {
+    id: row.UserID,
+    username: row.Username || row.username, // (safe)
+    role: row.Role || row.role,
+  };
+  req.session.mainAuthenticated = true;
 
-      console.log(`✅ Staff/Admin login by ${user.Username} (${user.Role})`);
+  // Backwards-compatibility flags
+  req.session.user = req.session.mainUser;
+  req.session.authenticated = true;
 
-      res.json({ success: true, role: user.Role });
-    });
+  console.log(`✅ Main DB login by ${req.session.mainUser.username} (${req.session.mainUser.role})`);
+
+  // ✅ IMPORTANT: save session to ensure Set-Cookie is sent
+  req.session.save((saveErr) => {
+    if (saveErr) {
+      console.error("❌ Session save error:", saveErr);
+      return res.status(500).send("Session error, please try again.");
+    }
+    return res.redirect('/dashboard');
   });
+});
+});
 });
 
 
