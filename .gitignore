@@ -30,3 +30,7 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# Never commit production persistence
+/data/
+/uploads/
