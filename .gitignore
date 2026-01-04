@@ -38,3 +38,9 @@ desktop.ini
 # runtime symlinks (prod)
 data
 uploads
+
+# editor temp files
+*.swp
+*.swo
+*.save
+*~
