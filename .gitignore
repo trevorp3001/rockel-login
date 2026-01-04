@@ -34,3 +34,7 @@ desktop.ini
 # Never commit production persistence
 /data/
 /uploads/
+
+# runtime symlinks (prod)
+data
+uploads
