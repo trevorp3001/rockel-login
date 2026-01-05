@@ -13,6 +13,21 @@ APP_USER="trevor"
 REPO_DIR="/var/www/rockel-login"
 PM2_APP="rockel"
 
+wait_for_url() {
+  local url="$1"
+  local tries="${2:-25}"
+  local delay="${3:-1}"
+
+  for i in $(seq 1 "$tries"); do
+    if curl -fsS "$url" >/dev/null; then
+      return 0
+    fi
+    sleep "$delay"
+  done
+
+  return 1
+}
+
 PROD_LOCAL_HEALTH="http://127.0.0.1:3000/health"
 PROD_PUBLIC_HEALTH="https://malachi.app/health"
 STAGING_HEALTH_URL="${STAGING_HEALTH_URL:-https://staging.malachi.app/health}"
@@ -85,12 +100,18 @@ echo "[5/8] npm ci"
 as_app_user "cd $REPO_DIR && npm ci --omit=dev"
 
 echo "[6/8] pm2 restart"
-as_app_user "pm2 restart $PM2_APP --update-env"
+run "sudo -u $APP_USER -H bash -lc 'pm2 restart $PM2_APP --update-env'"
 
 echo "[7/8] Local health"
-run "curl -fsS ${PROD_LOCAL_HEALTH} >/dev/null"
+if ! wait_for_url "$PROD_LOCAL_HEALTH" 25 1; then
+  echo "❌ Local health failed: $PROD_LOCAL_HEALTH"
+  exit 1
+fi
 
 echo "[8/8] Public health"
-run "curl -fsS ${PROD_PUBLIC_HEALTH} >/dev/null"
+if ! wait_for_url "$PROD_PUBLIC_HEALTH" 25 1; then
+  echo "❌ Public health failed: $PROD_PUBLIC_HEALTH"
+  exit 1
+fi
 
 echo "✅ Promote complete"
