@@ -76,7 +76,11 @@ require_cmd aws
 
 echo "[1/8] Checking staging health"
 if [[ -n "${STAGING_AUTH:-}" ]]; then
-  run "curl -fsS -u ${STAGING_AUTH} ${STAGING_HEALTH_URL} >/dev/null"
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY RUN: curl -fsS -u ****** ${STAGING_HEALTH_URL} >/dev/null"
+  else
+    curl -fsS -u "${STAGING_AUTH}" "${STAGING_HEALTH_URL}" >/dev/null
+  fi
 else
   run "curl -fsS ${STAGING_HEALTH_URL} >/dev/null"
 fi
