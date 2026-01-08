@@ -105,10 +105,16 @@ as_app_user "cd $REPO_DIR && npm ci --omit=dev"
 
 echo "[6/8] pm2 restart"
 run "sudo -u $APP_USER -H bash -lc 'pm2 restart $PM2_APP --update-env'"
+# Give Node a moment to bind after restart
+sleep 2
 
 echo "[7/8] Local health"
-if ! wait_for_url "$PROD_LOCAL_HEALTH" 25 1; then
+if ! wait_for_url "$PROD_LOCAL_HEALTH" 40 1; then
   echo "❌ Local health failed: $PROD_LOCAL_HEALTH"
+  echo "---- pm2 status ----"
+  sudo -u "$APP_USER" -H bash -lc "pm2 status"
+  echo "---- pm2 logs (last 80) ----"
+  sudo -u "$APP_USER" -H bash -lc "pm2 logs $PM2_APP --lines 80 --nostream"
   exit 1
 fi
 
