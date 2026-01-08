@@ -4493,8 +4493,11 @@ app.use((err, req, res, next) => {
 
 // Start server
 console.log('Setup complete. Starting server...');
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+
+const HOST = process.env.HOST || "127.0.0.1";
+
+app.listen(PORT, HOST, () => {
+  console.log(`✅ Server running on http://${HOST}:${PORT} in ${process.env.NODE_ENV} mode`);
 });
 
 
