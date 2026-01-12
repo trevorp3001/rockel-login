@@ -109,15 +109,28 @@ run "aws --endpoint-url ${SPACES_ENDPOINT} s3 ls ${SPACES_BUCKET} | tail -n 3"
 # capture current SHA for rollback
 PREV_SHA="$(sudo -u "$APP_USER" -H bash -lc "cd $REPO_DIR && git rev-parse HEAD")"
 
-echo "[4/8] Git pull"
-as_app_user "cd $REPO_DIR && git fetch origin"
+echo "[4/8] Merge staging -> main and push"
+as_app_user "cd $REPO_DIR && git fetch origin --prune"
 
 if [[ "$DRY_RUN" -eq 0 ]]; then
   DIRTY="$(sudo -u "$APP_USER" -H bash -lc "cd $REPO_DIR && git status --porcelain")"
   [[ -z "$DIRTY" ]] || { echo "ERROR: Working tree not clean"; exit 1; }
 fi
 
-as_app_user "cd $REPO_DIR && git pull origin main"
+# Make sure both branches exist
+as_app_user "cd $REPO_DIR && git show-ref --verify --quiet refs/remotes/origin/staging"
+as_app_user "cd $REPO_DIR && git show-ref --verify --quiet refs/remotes/origin/main"
+
+# Checkout main and fast-forward to origin/main first
+as_app_user "cd $REPO_DIR && git checkout main"
+as_app_user "cd $REPO_DIR && git reset --hard origin/main"
+
+# Merge staging into main (will stop if conflicts)
+as_app_user "cd $REPO_DIR && git merge --no-edit origin/staging"
+
+# Push updated main
+as_app_user "cd $REPO_DIR && git push origin main"
+
 
 echo "[5/8] npm ci"
 as_app_user "cd $REPO_DIR && npm ci --omit=dev"
