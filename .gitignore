@@ -44,3 +44,6 @@ uploads
 *.swo
 *.save
 *~
+
+# local backup files
+scripts/*.bak.*
