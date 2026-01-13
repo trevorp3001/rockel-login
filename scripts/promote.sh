@@ -117,8 +117,12 @@ if [[ "$DRY_RUN" -eq 0 ]]; then
   [[ -z "$DIRTY" ]] || { echo "ERROR: Working tree not clean"; exit 1; }
 fi
 
-# Always force a known-good base
-as_app_user "cd $REPO_DIR && git checkout -f main"
+# Make sure both branches exist
+as_app_user "cd $REPO_DIR && git show-ref --verify --quiet refs/remotes/origin/staging"
+as_app_user "cd $REPO_DIR && git show-ref --verify --quiet refs/remotes/origin/main"
+
+# Checkout main and fast-forward to origin/main first
+as_app_user "cd $REPO_DIR && git checkout main"
 as_app_user "cd $REPO_DIR && git reset --hard origin/main"
 
 # Merge staging into main (will stop if conflicts)
@@ -126,6 +130,7 @@ as_app_user "cd $REPO_DIR && git merge --no-edit origin/staging"
 
 # Push updated main
 as_app_user "cd $REPO_DIR && git push origin main"
+
 
 echo "[5/8] npm ci"
 as_app_user "cd $REPO_DIR && npm ci --omit=dev"
