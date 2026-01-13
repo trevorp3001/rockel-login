@@ -110,7 +110,8 @@ run "aws --endpoint-url ${SPACES_ENDPOINT} s3 ls ${SPACES_BUCKET} | tail -n 3"
 PREV_SHA="$(sudo -u "$APP_USER" -H bash -lc "cd $REPO_DIR && git rev-parse HEAD")"
 
 echo "[4/8] Merge staging -> main and push"
-as_app_user "cd $REPO_DIR && git fetch origin --prune"
+as_app_user "cd $REPO_DIR && git checkout -B main origin/main"as_app_user "cd $REPO_DIR && git fetch origin --prune"
+as_app_user "cd $REPO_DIR && git checkout -B main origin/main"
 
 if [[ "$DRY_RUN" -eq 0 ]]; then
   DIRTY="$(sudo -u "$APP_USER" -H bash -lc "cd $REPO_DIR && git status --porcelain")"
